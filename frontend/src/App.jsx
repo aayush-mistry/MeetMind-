@@ -42,7 +42,6 @@ const handleUploadRecording = async () => {
   }
 };
 const [summary, setSummary] = useState(null);
-  const [summary, setSummary] = useState(null);
   const [items, setItems] = useState([]);
   const [decisions, setDecisions] = useState([]);
   const [risksBlockers, setRisksBlockers] = useState([]);
@@ -335,19 +334,39 @@ const [summary, setSummary] = useState(null);
 
         {/* Metrics Grid */}
       {/* Upload Recording Section */}
-      <div className="flex items-center gap-4 mt-4">
-        <input
-          type="file"
-          accept="audio/*,video/*"
-          onChange={e => setUploadFile(e.target.files[0])}
-          className="border rounded p-1"
-        />
-        <button
-          onClick={handleUploadRecording}
-          className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition"
-        >
-          Upload Recording
-        </button>
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800">Upload Meeting Recording</h3>
+            <p className="text-sm text-slate-500 mt-1">Upload audio or video (mp3, wav, mp4) for AI processing.</p>
+          </div>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:flex-none">
+              <input
+                type="file"
+                id="file-upload"
+                accept="audio/*,video/*"
+                onChange={e => setUploadFile(e.target.files[0])}
+                className="sr-only"
+              />
+              <label
+                htmlFor="file-upload"
+                className="flex items-center justify-center w-full sm:w-auto px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors shadow-sm whitespace-nowrap"
+              >
+                <svg className="w-4 h-4 mr-2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                {uploadFile ? (uploadFile.name.length > 20 ? uploadFile.name.substring(0, 20) + '...' : uploadFile.name) : 'Choose File'}
+              </label>
+            </div>
+            <button
+              onClick={handleUploadRecording}
+              disabled={!uploadFile}
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all shadow-sm whitespace-nowrap flex items-center ${uploadFile ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+              Upload & Process
+            </button>
+          </div>
+        </div>
       </div>
         <StatsOverview items={items} decisions={decisions} risksBlockers={risksBlockers} />
 
