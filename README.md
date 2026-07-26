@@ -64,7 +64,7 @@
 
 ## 🏛️ Architecture
 
-```mermaid
+```
 flowchart LR
     subgraph Frontend
         UI[UI (React components)] -->|WebSocket| WS[WebSocket Client]
