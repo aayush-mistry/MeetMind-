@@ -4,6 +4,7 @@ import uuid
 from typing import Dict, List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from datetime import datetime
 import os
 import shutil
@@ -31,7 +32,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -110,100 +111,116 @@ async def submit_transcript(meeting_id: str, payload: TranscriptSubmission):
     title_match = text.split("\n")[0][:40] if text else "Meeting Transcript"
     title = f"Sync: {title_match}..."
     meeting = Meeting(id=meeting_id, title=title, transcript=text)
-    database.save_meeting(meeting)
+    await run_in_threadpool(database.save_meeting, meeting)
 
     asyncio.create_task(process_agentic_pipeline(meeting_id, text))
     return {"status": "processing_started", "meeting_id": meeting_id}
 
 async def process_agentic_pipeline(meeting_id: str, text: str):
     """Async Agent Pipeline with Live Processing Stage Visualizations."""
-    stages = [
-        "Transcript received",
-        "Detecting speakers & context",
-        "Understanding discussion & compiling summary",
-        "Extracting explicit decisions",
-        "Resolving commitments & assigning owners",
-        "Detecting risks & mapping dependencies",
-        "Calculating AI confidence scores",
-        "Finalizing results"
-    ]
+    try:
+        stages = [
+            "Transcript received",
+            "Detecting speakers & context",
+            "Understanding discussion & compiling summary",
+            "Extracting explicit decisions",
+            "Resolving commitments & assigning owners",
+            "Detecting risks & mapping dependencies",
+            "Calculating AI confidence scores",
+            "Finalizing results"
+        ]
 
-    await broadcast(meeting_id, {
-        "type": "processing_started",
-        "meeting_id": meeting_id,
-        "stages": stages
-    })
+        await broadcast(meeting_id, {
+            "type": "processing_started",
+            "meeting_id": meeting_id,
+            "stages": stages
+        })
 
-    for idx, stage in enumerate(stages[:4]):
+        for idx, stage in enumerate(stages[:4]):
+            await broadcast(meeting_id, {
+                "type": "analysis_stage",
+                "stage_index": idx,
+                "stage_text": stage
+            })
+            await asyncio.sleep(0.2)
+
+        # Perform AI extraction
+        summary, items, decisions, risks_blockers = await extractor.extract_meeting_intelligence(meeting_id, text)
+    
+        # Save summary
+        await run_in_threadpool(database.save_meeting_summary, summary)
+        await broadcast(meeting_id, {
+            "type": "summary_extracted",
+            "data": summary.dict()
+        })
+
+        for idx, stage in enumerate(stages[4:6], start=4):
+            await broadcast(meeting_id, {
+                "type": "analysis_stage",
+                "stage_index": idx,
+                "stage_text": stage
+            })
+            await asyncio.sleep(0.2)
+
+        # Save decisions
+        for d in decisions:
+            await run_in_threadpool(database.save_decision, d)
+            await broadcast(meeting_id, {
+                "type": "decision_extracted",
+                "data": d.dict()
+            })
+            await asyncio.sleep(0.15)
+
+        # Save risks & blockers
+        for rb in risks_blockers:
+            await run_in_threadpool(database.save_risk_blocker, rb)
+            await broadcast(meeting_id, {
+                "type": "risk_extracted",
+                "data": rb.dict()
+            })
+            await asyncio.sleep(0.15)
+
+        # Save Action Items line by line
+        for item in items:
+            await run_in_threadpool(database.save_action_item, item)
+            await broadcast(meeting_id, {
+                "type": "item_extracted",
+                "data": item.dict()
+            })
+            await asyncio.sleep(0.25)
+
+        # Broadcast final stage
         await broadcast(meeting_id, {
             "type": "analysis_stage",
-            "stage_index": idx,
-            "stage_text": stage
+            "stage_index": 7,
+            "stage_text": "Finalizing results"
         })
-        await asyncio.sleep(0.2)
-
-    # Perform AI extraction
-    summary, items, decisions, risks_blockers = await extractor.extract_meeting_intelligence(meeting_id, text)
-
-    # Save summary
-    database.save_meeting_summary(summary)
-    await broadcast(meeting_id, {
-        "type": "summary_extracted",
-        "data": summary.dict()
-    })
-
-    for idx, stage in enumerate(stages[4:6], start=4):
+    
         await broadcast(meeting_id, {
-            "type": "analysis_stage",
-            "stage_index": idx,
-            "stage_text": stage
+            "type": "processing_complete",
+            "total_items": len(items),
+            "total_decisions": len(decisions),
+            "total_risks": len(risks_blockers),
+            "meeting_id": meeting_id
         })
-        await asyncio.sleep(0.2)
-
-    # Save decisions
-    for d in decisions:
-        database.save_decision(d)
+    
+        # Start Autonomous Agent Loop
+        scheduler.start_agent_loop(meeting_id, broadcast)
+    except Exception as e:
+        print(f"[Pipeline Error] {e}")
         await broadcast(meeting_id, {
-            "type": "decision_extracted",
-            "data": d.dict()
+            "type": "agent_event",
+            "data": {
+                "id": str(uuid.uuid4())[:8],
+                "meeting_id": meeting_id,
+                "type": "pipeline_error",
+                "action": "HALT",
+                "reason": f"Pipeline failed: {str(e)}",
+                "signals": ["Exception caught"],
+                "target": "System",
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
         })
-        await asyncio.sleep(0.15)
-
-    # Save risks & blockers
-    for rb in risks_blockers:
-        database.save_risk_blocker(rb)
-        await broadcast(meeting_id, {
-            "type": "risk_extracted",
-            "data": rb.dict()
-        })
-        await asyncio.sleep(0.15)
-
-    # Save Action Items line by line
-    for item in items:
-        database.save_action_item(item)
-        await broadcast(meeting_id, {
-            "type": "item_extracted",
-            "data": item.dict()
-        })
-        await asyncio.sleep(0.25)
-
-    # Broadcast final stage
-    await broadcast(meeting_id, {
-        "type": "analysis_stage",
-        "stage_index": 7,
-        "stage_text": "Finalizing results"
-    })
-
-    await broadcast(meeting_id, {
-        "type": "processing_complete",
-        "total_items": len(items),
-        "total_decisions": len(decisions),
-        "total_risks": len(risks_blockers),
-        "meeting_id": meeting_id
-    })
-
-    # Start Autonomous Agent Loop
-    scheduler.start_agent_loop(meeting_id, broadcast)
 
 async def process_uploaded_meeting(meeting_id: str, file_path: str, metadata: Dict):
     """Process an uploaded audio/video file.
@@ -219,7 +236,7 @@ async def process_uploaded_meeting(meeting_id: str, file_path: str, metadata: Di
         audio_path = os.path.join(UPLOAD_DIR, f"{meeting_id}_audio.wav")
         try:
             cmd = ["ffmpeg", "-y", "-i", file_path, "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", audio_path]
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
             await stage_update("Audio Extracted")
         except Exception as e:
             print(f"FFmpeg extraction failed: {e}")
@@ -228,6 +245,7 @@ async def process_uploaded_meeting(meeting_id: str, file_path: str, metadata: Di
 
     await stage_update("Detecting Language")
     model = None
+    result = {}
     try:
         import whisper
         model = whisper.load_model("base")
@@ -263,7 +281,7 @@ async def process_uploaded_meeting(meeting_id: str, file_path: str, metadata: Di
     # Save meeting record
     from app.models import Meeting
     meeting = Meeting(id=meeting_id, title=metadata["file_name"], description="Uploaded recording", transcript=transcript, created_at=datetime.utcnow().isoformat())
-    database.save_meeting(meeting)
+    await run_in_threadpool(database.save_meeting, meeting)
     # Update metadata fields in DB
     conn = database.get_db_connection()
     cur = conn.cursor()
@@ -301,6 +319,8 @@ async def process_uploaded_meeting(meeting_id: str, file_path: str, metadata: Di
 
     if audio_path != file_path and os.path.exists(audio_path):
         os.remove(audio_path)
+    if os.path.exists(file_path):
+        os.remove(file_path)
 
 @app.post("/api/meeting/{meeting_id}/items")
 async def create_manual_item(meeting_id: str, payload: ActionItemCreate):
@@ -318,7 +338,7 @@ async def create_manual_item(meeting_id: str, payload: ActionItemCreate):
         source_quote="Manually created item",
         needs_review=False
     )
-    database.save_action_item(item)
+    await run_in_threadpool(database.save_action_item, item)
     
     await broadcast(meeting_id, {
         "type": "item_extracted",
@@ -349,7 +369,7 @@ async def update_item(meeting_id: str, item_id: str, payload: ActionItemUpdate):
     if payload.needs_review is not None:
         item.needs_review = payload.needs_review
 
-    database.save_action_item(item)
+    await run_in_threadpool(database.save_action_item, item)
 
     await broadcast(meeting_id, {
         "type": "item_updated",
@@ -366,7 +386,7 @@ async def confirm_needs_review_item(meeting_id: str, item_id: str):
     item.needs_review = False
     if item.status == "needs_review":
         item.status = "pending"
-    database.save_action_item(item)
+    await run_in_threadpool(database.save_action_item, item)
 
     await broadcast(meeting_id, {
         "type": "item_updated",
@@ -381,7 +401,7 @@ async def mark_item_complete(meeting_id: str, item_id: str):
         raise HTTPException(status_code=404, detail="Item not found")
     
     item.status = "completed"
-    database.save_action_item(item)
+    await run_in_threadpool(database.save_action_item, item)
 
     event = AgentEvent(
         id=str(uuid.uuid4())[:8],
@@ -392,7 +412,7 @@ async def mark_item_complete(meeting_id: str, item_id: str):
         signals=["Completion signal received", "Task state: completed"],
         target=f"@{item.owner}"
     )
-    database.save_agent_event(event)
+    await run_in_threadpool(database.save_agent_event, event)
 
     await broadcast(meeting_id, {
         "type": "item_completed",
@@ -450,7 +470,7 @@ async def upload_meeting(file: UploadFile = File(...), background_tasks: Backgro
 @app.delete("/api/meeting/{meeting_id}")
 async def reset_meeting(meeting_id: str):
     scheduler.stop_agent_loop(meeting_id)
-    database.clear_meeting_data(meeting_id)
+    await run_in_threadpool(database.clear_meeting_data, meeting_id)
     
     await broadcast(meeting_id, {
         "type": "meeting_reset",

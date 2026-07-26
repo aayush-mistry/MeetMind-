@@ -9,9 +9,8 @@ import ReminderFeed from './components/ReminderFeed';
 import TaskDetailDrawer from './components/TaskDetailDrawer';
 import MeetingHistorySidebar from './components/MeetingHistorySidebar';
 
-const BACKEND_HOST = 'localhost:8000';
-const API_BASE = `http://${BACKEND_HOST}/api`;
-const WS_BASE = `ws://${BACKEND_HOST}/ws`;
+const API_BASE = `/api`;
+const WS_BASE = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 
 
 export default function App() {
@@ -39,6 +38,7 @@ const handleUploadRecording = async () => {
     }
   } catch (err) {
     console.error('Upload error:', err);
+    alert(`Failed to upload recording: ${err.message || 'Server error'}`);
   }
 };
 const [summary, setSummary] = useState(null);
@@ -244,13 +244,15 @@ const [summary, setSummary] = useState(null);
     setIsExtracting(true);
     setAnalysisStageIndex(0);
     try {
-      await fetch(`${API_BASE}/transcript/${meetingId}`, {
+      const res = await fetch(`${API_BASE}/transcript/${meetingId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       });
+      if (!res.ok) throw new Error(await res.text());
     } catch (err) {
       console.error('Submit transcript error:', err);
+      alert(`Failed to process transcript: ${err.message}`);
       setIsExtracting(false);
     }
   };

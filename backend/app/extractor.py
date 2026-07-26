@@ -52,6 +52,10 @@ async def extract_meeting_intelligence(
     transcript_text: str
 ) -> Tuple[MeetingSummary, List[ActionItem], List[Decision], List[RiskBlocker]]:
     
+    if not transcript_text or not transcript_text.strip():
+        empty_summary = MeetingSummary(meeting_id=meeting_id, summary_text="No discussion recorded.", action_items_count=0, decisions_count=0, risks_count=0, blockers_count=0)
+        return empty_summary, [], [], []
+
     api_key = os.environ.get("GEMINI_API_KEY")
     data = None
 
@@ -194,11 +198,12 @@ def _heuristic_nlp_extraction(text: str) -> Dict[str, Any]:
         content = line
         if ":" in line:
             parts = line.split(":", 1)
-            speaker_match = re.match(r"^([A-Za-z0-9\s\(\)]+)", parts[0].strip())
-            if speaker_match:
-                raw_name = speaker_match.group(1).split("(")[0].strip()
-                speaker = raw_name.split()[0]
-            content = parts[1].strip()
+            if len(parts) == 2:
+                speaker_match = re.match(r"^([A-Za-z0-9\s\(\)]+)", parts[0].strip())
+                if speaker_match:
+                    raw_name = speaker_match.group(1).split("(")[0].strip()
+                    speaker = raw_name.split()[0] if raw_name.split() else "Unassigned"
+                content = parts[1].strip()
 
         # Check for Decision
         if any(kw in content.lower() for kw in ["decision:", "agreed:", "confirmed:", "decided"]):

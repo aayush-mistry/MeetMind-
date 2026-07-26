@@ -112,6 +112,12 @@ def init_db():
         )
     """)
     
+    # Indexes
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_action_items_meeting_id ON action_items(meeting_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_decisions_meeting_id ON decisions(meeting_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_risks_blockers_meeting_id ON risks_blockers(meeting_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_events_meeting_id ON agent_events(meeting_id)")
+    
     conn.commit()
     conn.close()
 
