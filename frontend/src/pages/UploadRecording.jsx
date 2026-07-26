@@ -18,10 +18,16 @@ export default function UploadRecording() {
         method: 'POST',
         body: form,
       });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Server returned ${res.status}: ${text}`);
+      }
       const data = await res.json();
       if (data.meeting_id) {
         setMeetingId(data.meeting_id);
         navigate('/live');
+      } else {
+        throw new Error('No meeting_id returned from backend');
       }
     } catch (err) {
       alert(`Failed to upload recording: ${err.message || 'Server error'}`);

@@ -230,70 +230,80 @@ async def process_uploaded_meeting(meeting_id: str, file_path: str, metadata: Di
     async def stage_update(stage: str, progress: float = 0.0):
         await broadcast(meeting_id, {"type": "stage_update", "stage": stage, "progress": progress})
 
-    await stage_update("Extracting Audio")
-    audio_path = file_path
-    if metadata["content_type"].startswith("video"):
-        audio_path = os.path.join(UPLOAD_DIR, f"{meeting_id}_audio.wav")
-        try:
-            cmd = ["ffmpeg", "-y", "-i", file_path, "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", audio_path]
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
-            await stage_update("Audio Extracted")
-        except Exception as e:
-            print(f"FFmpeg extraction failed: {e}")
-            audio_path = file_path
-            await stage_update("Audio Extraction Skipped")
-
-    await stage_update("Detecting Language")
-    model = None
-    result = {}
-    try:
-        import whisper
-        model = whisper.load_model("base")
-        result = model.transcribe(audio_path, language=None, task="transcribe", beam_size=1)
-        detected_lang = result.get("language", "en")
-    except Exception as e:
-        print(f"[Whisper] Failed to load/transcribe: {e}")
-        detected_lang = "en"
+    await stage_update("Uploading Audio to Gemini", progress=0.1)
     
-    metadata["original_language"] = detected_lang
-    await stage_update("Language Detected", progress=0.1)
-
-    await stage_update("Transcribing")
     try:
-        if model is not None:
-            result = model.transcribe(audio_path, language=detected_lang, task="transcribe", word_timestamps=True)
-            transcript = result.get("text", "")
-        else:
-            raise ImportError("Whisper model is not available.")
-    except Exception as e:
-        print(f"[Whisper] Transcription failed: {e}. Using mock transcript.")
-        transcript = (
-            "Alex (Product Lead): Welcome everyone. We need to finalize our deliverable readiness for the v2.0 release next Friday.\n"
-            "Riya (Engineering): The backend WebSocket pipeline is 90% complete. I will finish the auto-reconnect fallback and API rate limiting by Monday, July 28.\n"
-            "David (Design Lead): Design review for the dark mode glassmorphism UI is wrapped up. I will hand over the final Figma tokens to Sarah by tomorrow, July 26.\n"
-            "Sarah (Frontend Dev): Perfect. Once David gives me the design tokens, I'll integrate them into the React component system. I'll need to finalize the dashboard responsive view by Wednesday, July 30.\n"
-            "Alex: Great. We also need someone to prepare the live demo script and slide deck for the judges. Sarah, can you own the demo slide deck by July 29?\n"
-            "Sarah: Sure, I can take care of the slide deck.\n"
-            "Marcus (QA Lead): QA automation script execution is pending load testing. Marcus will run end-to-end stress tests on the server on Tuesday, July 29.\n"
-            "Riya: Also urgent: we must rotate our production API keys before launch. Riya will update the environment credentials by Sunday, July 27.\n"
-            "Alex: Decision confirmed: Product v2.0 launch remains scheduled for July 31. Let's touch base again on Wednesday. Thanks team!"
+        from google import genai
+        import json
+        client = genai.Client()
+        
+        # Upload the file to Gemini
+        print(f"Uploading {file_path} to Gemini API...")
+        uploaded_file = await run_in_threadpool(client.files.upload, file=file_path)
+        
+        await stage_update("Transcribing and Translating", progress=0.3)
+        
+        # Request transcription and language detection
+        prompt = (
+            "Listen to this audio file. First, identify the original spoken language. "
+            "Then, transcribe the audio perfectly. If the audio is not in English, translate the transcription into English. "
+            "Return a JSON object with exactly two string keys: 'original_language' and 'english_transcript'."
         )
+        
+        response = await run_in_threadpool(
+            client.models.generate_content,
+            model='gemini-1.5-flash',
+            contents=[prompt, uploaded_file]
+        )
+        
+        # Delete file from Gemini
+        await run_in_threadpool(client.files.delete, name=uploaded_file.name)
+        
+        # Parse JSON output
+        try:
+            # Clean markdown code blocks if any
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text[7:]
+            if text.endswith("```"):
+                text = text[:-3]
+            data = json.loads(text.strip())
+            detected_lang = data.get("original_language", "Unknown")
+            transcript = data.get("english_transcript", "")
+        except Exception as e:
+            print("Failed to parse Gemini JSON:", e)
+            detected_lang = "Unknown"
+            transcript = response.text
+
+    except Exception as e:
+        print(f"[Gemini Audio] Transcription failed: {e}")
+        detected_lang = "en"
+        transcript = f"Transcription failed due to API error: {str(e)}"
+
+    await stage_update(f"Language Detected: {detected_lang}", progress=0.6)
+    
     # Save meeting record
     from app.models import Meeting
-    meeting = Meeting(id=meeting_id, title=metadata["file_name"], description="Uploaded recording", transcript=transcript, created_at=datetime.utcnow().isoformat())
+    meeting = Meeting(
+        id=meeting_id, 
+        title=metadata.get("file_name", "Uploaded Recording"), 
+        description="Uploaded recording", 
+        transcript=transcript, 
+        created_at=datetime.utcnow().isoformat()
+    )
     await run_in_threadpool(database.save_meeting, meeting)
+    
     # Update metadata fields in DB
     conn = database.get_db_connection()
     cur = conn.cursor()
     cur.execute(
-        """UPDATE meetings SET meeting_type=?, original_language=?, translation_language=?, file_name=?, file_size=?, duration_seconds=?, processing_time_seconds=? WHERE id=?""",
+        """UPDATE meetings SET meeting_type=?, original_language=?, translation_language=?, file_name=?, file_size=?, processing_time_seconds=? WHERE id=?""",
         (
             metadata.get("meeting_type"),
-            metadata.get("original_language"),
-            "en" if detected_lang == "en" else "en",
+            detected_lang,
+            "en",
             metadata.get("file_name"),
             metadata.get("file_size"),
-            int(result.get("duration", 0)),
             int(datetime.utcnow().timestamp() - datetime.fromisoformat(meeting.created_at).timestamp()),
             meeting_id,
         ),
@@ -301,24 +311,11 @@ async def process_uploaded_meeting(meeting_id: str, file_path: str, metadata: Di
     conn.commit()
     conn.close()
 
-    if detected_lang != "en":
-        await stage_update("Translating to English")
-        try:
-            from googletrans import Translator
-            translator = Translator()
-            translated = translator.translate(transcript, dest="en")
-            translated_text = translated.text
-        except Exception:
-            translated_text = transcript
-    else:
-        translated_text = transcript
-
-    await stage_update("Generating AI Summary")
-    await process_agentic_pipeline(meeting_id, translated_text)
+    await stage_update("Generating AI Summary", progress=0.8)
+    await process_agentic_pipeline(meeting_id, transcript)
     await stage_update("Completed", progress=1.0)
 
-    if audio_path != file_path and os.path.exists(audio_path):
-        os.remove(audio_path)
+    # Cleanup local file
     if os.path.exists(file_path):
         os.remove(file_path)
 
@@ -431,11 +428,11 @@ async def upload_meeting(file: UploadFile = File(...), background_tasks: Backgro
     Returns a meeting_id that can be used to query status/results.
     """
     # Validate file type
-    allowed_audio = {"audio/mpeg", "audio/wav", "audio/mp4", "audio/x-m4a", "audio/aac", "audio/flac"}
+    allowed_audio = {"audio/mpeg", "audio/wav", "audio/mp4", "audio/x-m4a", "audio/aac", "audio/flac", "audio/webm", "audio/ogg"}
     allowed_video = {"video/mp4", "video/quicktime", "video/x-msvideo", "video/x-matroska", "video/webm"}
     content_type = file.content_type
     if content_type not in allowed_audio.union(allowed_video):
-        raise HTTPException(status_code=400, detail="Unsupported file type")
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {content_type}")
 
     # Ensure upload directory exists
     upload_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
@@ -498,7 +495,7 @@ async def chat_endpoint(payload: ChatQuery):
         prompt = f"Use the following meeting transcripts to answer the user's question.\n\n{context}\n\nUser Question: {payload.query}"
         
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-1.5-flash',
             contents=prompt
         )
         return {"answer": response.text}

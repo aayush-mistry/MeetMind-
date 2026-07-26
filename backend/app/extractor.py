@@ -69,7 +69,7 @@ async def extract_meeting_intelligence(
             response = await loop.run_in_executor(
                 None,
                 lambda: client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-1.5-flash",
                     contents=prompt,
                 )
             )
@@ -268,7 +268,7 @@ def _heuristic_nlp_extraction(text: str) -> Dict[str, Any]:
                 "dependencies": []
             })
 
-    summary_text = "The team met to review deliverable readiness, assign ownership for key modules, document explicit project decisions, and mitigate potential dependency risks."
+    summary_text = f"Transcription and extraction failed. Raw text received: '{text[:100]}...'"
     
     return {
         "summary": summary_text,

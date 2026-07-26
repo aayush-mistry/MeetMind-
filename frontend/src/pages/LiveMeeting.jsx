@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useMeeting } from '../context/MeetingContext';
-import TranscriptInput from '../components/TranscriptInput';
 import MeetingSummaryCard from '../components/MeetingSummaryCard';
 import ActionItemsTable from '../components/ActionItemsTable';
 import ReminderFeed from '../components/ReminderFeed';
@@ -81,12 +80,6 @@ export default function LiveMeeting() {
           </span>
         </div>
       </div>
-
-      <TranscriptInput
-        onSubmitTranscript={handleSubmitTranscript}
-        isExtracting={isExtracting}
-        analysisStageIndex={analysisStageIndex}
-      />
 
       {summary && <MeetingSummaryCard summary={summary} />}
 

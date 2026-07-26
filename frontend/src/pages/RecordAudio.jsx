@@ -16,8 +16,10 @@ export default function RecordAudio() {
   const navigate = useNavigate();
 
   const startRecording = async () => {
+    console.log('[RecordAudio] startRecording clicked');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('[RecordAudio] Microphone access granted');
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
@@ -29,6 +31,7 @@ export default function RecordAudio() {
       mediaRecorder.onstop = handleStop;
 
       mediaRecorder.start();
+      console.log('[RecordAudio] Recording started');
       setIsRecording(true);
       setIsPaused(false);
       
@@ -36,6 +39,7 @@ export default function RecordAudio() {
         setDuration(prev => prev + 1);
       }, 1000);
     } catch (err) {
+      console.error('[RecordAudio] Could not access microphone:', err);
       alert("Could not access microphone: " + err.message);
     }
   };
@@ -59,33 +63,61 @@ export default function RecordAudio() {
   };
 
   const stopRecording = () => {
+    console.log('[RecordAudio] stopRecording clicked (Stop & Process button)');
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       setIsRecording(false);
       setIsPaused(false);
       clearInterval(timerRef.current);
+    } else {
+      console.warn('[RecordAudio] mediaRecorderRef.current is null!');
     }
   };
 
   const handleStop = async () => {
+    console.log('[RecordAudio] handleStop triggered by mediaRecorder.onstop');
     setIsProcessing(true);
+    
+    if (chunksRef.current.length === 0) {
+      console.error('[RecordAudio] No audio chunks recorded!');
+      alert('Recording failed: No audio data captured.');
+      setIsProcessing(false);
+      return;
+    }
+
     const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
     const file = new File([blob], 'browser_recording.webm', { type: 'audio/webm' });
+    console.log(`[RecordAudio] Generated file Blob: ${file.size} bytes`);
+    
     const form = new FormData();
     form.append('file', file);
     
     try {
+      console.log('[RecordAudio] Sending POST request to /api/meeting/upload');
       const res = await fetch(`/api/meeting/upload`, {
         method: 'POST',
         body: form,
       });
+      
+      console.log(`[RecordAudio] Backend responded with status: ${res.status}`);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Server returned ${res.status}: ${text}`);
+      }
+      
       const data = await res.json();
+      console.log('[RecordAudio] Backend response data:', data);
+      
       if (data.meeting_id) {
+        console.log('[RecordAudio] Setting meetingId and navigating to /live');
         setMeetingId(data.meeting_id);
         navigate('/live');
+      } else {
+        throw new Error('No meeting_id returned from backend');
       }
     } catch (err) {
+      console.error('[RecordAudio] Upload error:', err);
       alert(`Upload failed: ${err.message}`);
     } finally {
       setIsProcessing(false);
