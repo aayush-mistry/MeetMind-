@@ -477,3 +477,32 @@ async def reset_meeting(meeting_id: str):
         "meeting_id": meeting_id
     })
     return {"status": "reset_successful", "meeting_id": meeting_id}
+
+from pydantic import BaseModel
+
+class ChatQuery(BaseModel):
+    query: str
+
+@app.post("/api/chat")
+async def chat_endpoint(payload: ChatQuery):
+    try:
+        from google import genai
+        client = genai.Client()
+        
+        # Get all meeting transcripts as context
+        meetings = database.get_meetings()
+        context = "Meeting Transcripts:\n"
+        for m in meetings:
+            context += f"Meeting {m.title}:\n{m.transcript}\n\n"
+            
+        prompt = f"Use the following meeting transcripts to answer the user's question.\n\n{context}\n\nUser Question: {payload.query}"
+        
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        return {"answer": response.text}
+    except Exception as e:
+        print("Chat Error:", e)
+        return {"answer": f"I received your question: '{payload.query}'. However, I was unable to connect to the Gemini API to search your transcripts. Please check API keys."}
+
