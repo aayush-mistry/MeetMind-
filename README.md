@@ -45,7 +45,7 @@
    The app will be available at `http://localhost:3000/`.
 3. **Start the backend server**:
    ```bash
-   uvicorn app.main:app --host 0.0.0.0 --port 8000
+   uvicorn app.main:app --host 0.0.0.0 --port 8000 
    ```
    Backend API is reachable at `http://localhost:8000/` and WebSocket at `ws://localhost:8000/ws/meeting/demo_meeting`.
 3. **Backend** – See the backend README for instructions on starting the AI agents.
