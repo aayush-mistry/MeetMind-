@@ -49,9 +49,13 @@ html.dark body {
   color: #F8FAFC !important;
 }
 
-html.dark .bg-white {
+html.dark .bg-white,
+html.dark select,
+html.dark input,
+html.dark textarea {
   background-color: #1E293B !important;
   border-color: #334155 !important;
+  color: #F8FAFC !important;
 }
 
 html.dark .text-slate-900,
@@ -92,3 +96,10 @@ html.dark .saas-card {
   background-color: #1E293B !important;
   border-color: #334155 !important;
 }
+
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-100:hover {
+  background-color: #334155 !important;
+  color: #F8FAFC !important;
+}
+
