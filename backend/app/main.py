@@ -462,3 +462,177 @@ async def chat_endpoint(payload: ChatQuery):
         print("Chat Error:", e)
         return {"answer": f"I received your question: '{payload.query}'. However, I was unable to process it with the AI provider. Error: {str(e)}"}
 
+# --- CALENDAR API ENDPOINTS ---
+
+from app.models import CalendarAccount, CalendarEvent
+import random
+
+@app.get("/api/calendar/auth/{provider}")
+async def calendar_auth(provider: str):
+    if provider not in ["google", "outlook"]:
+        raise HTTPException(status_code=400, detail="Invalid provider")
+    # Stub OAuth: Return a fake auth URL
+    fake_auth_url = f"/api/calendar/callback?provider={provider}&code=fake_auth_code_123"
+    return {"auth_url": fake_auth_url}
+
+@app.get("/api/calendar/callback")
+async def calendar_callback(provider: str, code: str):
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing auth code")
+    
+    # Save a fake account for "default_user"
+    account = CalendarAccount(
+        user_id="default_user",
+        provider=provider,
+        access_token=f"fake_{provider}_token_{uuid.uuid4()}",
+        refresh_token="fake_refresh_token"
+    )
+    await run_in_threadpool(database.save_calendar_account, account)
+    
+    # Generate some fake events for testing if none exist
+    events = database.get_calendar_events()
+    if len(events) < 3:
+        for i in range(1, 4):
+            event = CalendarEvent(
+                id=str(uuid.uuid4()),
+                event_id=f"evt_{uuid.uuid4()}",
+                title=f"Sample Meeting {i} ({provider})",
+                start_time=datetime.utcnow().isoformat() + "Z",
+                end_time=datetime.utcnow().isoformat() + "Z",
+                participants="Alice, Bob",
+                platform="Google Meet" if provider == "google" else "Teams",
+                status="scheduled"
+            )
+            await run_in_threadpool(database.save_calendar_event, event)
+
+    return {"status": "success", "message": f"Connected to {provider}"}
+
+@app.get("/api/calendar/accounts")
+def get_calendar_accounts():
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT provider FROM calendar_accounts WHERE user_id = 'default_user'")
+    rows = cursor.fetchall()
+    conn.close()
+    return {"connected_providers": [r["provider"] for r in rows]}
+
+@app.delete("/api/calendar/accounts/{provider}")
+def disconnect_calendar_account(provider: str):
+    database.delete_calendar_account("default_user", provider)
+    return {"status": "disconnected"}
+
+@app.get("/api/calendar/events")
+def list_calendar_events():
+    return database.get_calendar_events()
+
+@app.post("/api/calendar/link/{meeting_id}/{event_id}")
+def link_meeting_to_event(meeting_id: str, event_id: str):
+    database.link_calendar_event(event_id, meeting_id)
+    return {"status": "linked", "meeting_id": meeting_id, "event_id": event_id}
+
+# --- SPEAKER IDENTIFICATION API ---
+
+from app.models import SpeakerMapping
+from pydantic import BaseModel
+
+class SpeakerRename(BaseModel):
+    original_speaker: str
+    mapped_speaker: str
+
+@app.get("/api/meetings/{meeting_id}/speakers")
+def get_speakers(meeting_id: str):
+    # Retrieve mappings
+    mappings = database.get_speaker_mappings(meeting_id)
+    return {"mappings": [m.dict() for m in mappings]}
+
+@app.put("/api/meetings/{meeting_id}/speakers")
+def rename_speaker(meeting_id: str, payload: SpeakerRename):
+    mapping = SpeakerMapping(
+        meeting_id=meeting_id,
+        original_speaker=payload.original_speaker,
+        mapped_speaker=payload.mapped_speaker
+    )
+    database.save_speaker_mapping(mapping)
+    return {"status": "success", "mapping": mapping.dict()}
+
+
+# --- MEETING MINUTES & EXPORT API ---
+
+from app.models import MeetingMinute, ExportLog
+from fastapi.responses import FileResponse
+import tempfile
+from app.services.ai.provider_factory import get_ai_provider
+
+@app.post("/api/meetings/{meeting_id}/minutes")
+async def generate_meeting_minutes(meeting_id: str):
+    meeting = database.get_meeting(meeting_id)
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+        
+    provider = get_ai_provider()
+    
+    # Simple prompt for generating minutes (would typically be in prompts.py)
+    prompt = """
+    Generate a professional Meeting Minutes document from the following transcript.
+    Format as JSON with these keys: 
+    - title
+    - date (use today's date)
+    - time
+    - duration (estimate)
+    - participants (list based on speakers)
+    - executive_summary
+    - discussion (list of key points)
+    - action_items (list of objects with 'task', 'owner', 'deadline')
+    - decisions (list)
+    """
+    
+    try:
+        response = await provider.chat(meeting.transcript, prompt)
+        
+        # Save generated minutes
+        minute = MeetingMinute(
+            meeting_id=meeting_id,
+            content=response, # In reality, parse json and format properly
+            format="json"
+        )
+        await run_in_threadpool(database.save_meeting_minute, minute)
+        return {"status": "success", "minutes": minute.dict()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/meetings/{meeting_id}/minutes")
+def get_meeting_minutes(meeting_id: str):
+    minutes = database.get_meeting_minute(meeting_id)
+    if not minutes:
+        raise HTTPException(status_code=404, detail="Minutes not generated yet")
+    return {"minutes": minutes.dict()}
+
+@app.get("/api/meetings/{meeting_id}/export/{format}")
+def export_meeting_minutes(meeting_id: str, format: str):
+    # This is a stub for the export logic.
+    # We would use reportlab for PDF, python-docx for DOCX, markdown for MD, etc.
+    minutes = database.get_meeting_minute(meeting_id)
+    if not minutes:
+        raise HTTPException(status_code=404, detail="Minutes not generated yet")
+        
+    # Log export
+    log = ExportLog(id=str(uuid.uuid4()), meeting_id=meeting_id, format=format)
+    database.log_export(log)
+
+    # For the stub, just return text as the requested format type
+    content = minutes.content
+    
+    fd, path = tempfile.mkstemp(suffix=f".{format}")
+    with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        f.write(content)
+        
+    media_types = {
+        "pdf": "application/pdf",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "md": "text/markdown",
+        "txt": "text/plain"
+    }
+    
+    return FileResponse(path, media_type=media_types.get(format, "text/plain"), filename=f"Meeting_Minutes_{meeting_id}.{format}")
+
+

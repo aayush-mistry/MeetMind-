@@ -59,6 +59,7 @@ export default function MeetingHistory() {
                 <td className="px-6 py-4 text-slate-500">{m.original_language || 'en'}</td>
                 <td className="px-6 py-4 text-right space-x-3">
                   <button onClick={() => { setMeetingId(m.id); navigate('/live'); }} className="text-indigo-600 hover:underline font-medium">Open</button>
+                  <button onClick={() => navigate(`/minutes/${m.id}`)} className="text-emerald-600 hover:underline font-medium">Minutes</button>
                   <button onClick={() => handleDelete(m.id)} className="text-red-500 hover:underline font-medium">Delete</button>
                 </td>
               </tr>

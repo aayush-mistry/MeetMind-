@@ -9,6 +9,8 @@ import MeetingHistory from './pages/MeetingHistory';
 import AiChat from './pages/AiChat';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
+import CalendarDashboard from './pages/CalendarDashboard';
+import MeetingMinutes from './pages/MeetingMinutes';
 
 export default function App() {
   return (
@@ -22,6 +24,9 @@ export default function App() {
         <Route path="chat" element={<AiChat />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="calendar" element={<CalendarDashboard />} />
+        <Route path="minutes" element={<MeetingMinutes />} />
+        <Route path="minutes/:id" element={<MeetingMinutes />} />
       </Route>
     </Routes>
   );

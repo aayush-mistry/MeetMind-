@@ -4,6 +4,7 @@ import MeetingSummaryCard from '../components/MeetingSummaryCard';
 import ActionItemsTable from '../components/ActionItemsTable';
 import ReminderFeed from '../components/ReminderFeed';
 import TaskDetailDrawer from '../components/TaskDetailDrawer';
+import SpeakersList from '../components/SpeakersList';
 
 const API_BASE = '/api';
 
@@ -95,8 +96,9 @@ export default function LiveMeeting() {
             onAddManualItem={handleAddManualItem}
           />
         </div>
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 space-y-6">
           <ReminderFeed events={agentEvents} />
+          {meetingId && <SpeakersList meetingId={meetingId} />}
         </div>
       </div>
 

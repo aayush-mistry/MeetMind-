@@ -86,3 +86,39 @@ class AgentEvent(BaseModel):
     signals: List[str] = Field(default_factory=list)
     target: str = ""
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+
+class CalendarAccount(BaseModel):
+    user_id: str
+    provider: Literal["google", "outlook"]
+    access_token: str
+    refresh_token: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+class CalendarEvent(BaseModel):
+    id: str
+    event_id: str
+    title: str
+    start_time: str
+    end_time: str
+    participants: str = ""
+    platform: str = "Offline"
+    meeting_id: Optional[str] = None
+    status: str = "scheduled"
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+class SpeakerMapping(BaseModel):
+    meeting_id: str
+    original_speaker: str
+    mapped_speaker: str
+
+class MeetingMinute(BaseModel):
+    meeting_id: str
+    content: str
+    format: str = "json"
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+class ExportLog(BaseModel):
+    id: str
+    meeting_id: str
+    format: str
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())

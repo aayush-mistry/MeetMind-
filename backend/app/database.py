@@ -2,8 +2,7 @@ import sqlite3
 import json
 import os
 from typing import List, Optional, Dict, Any
-from app.models import ActionItem, Decision, RiskBlocker, MeetingSummary, Meeting, AgentEvent
-
+from app.models import ActionItem, Decision, RiskBlocker, MeetingSummary, Meeting, AgentEvent, CalendarAccount, CalendarEvent, SpeakerMapping, MeetingMinute, ExportLog
 DB_FILE = os.path.join(os.path.dirname(__file__), "..", "meeting_agent.db")
 
 def get_db_connection():
@@ -108,6 +107,64 @@ def init_db():
             reason TEXT NOT NULL,
             signals TEXT DEFAULT '[]',
             target TEXT,
+            timestamp TEXT NOT NULL
+        )
+    """)
+    
+    # Calendar Accounts table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS calendar_accounts (
+            user_id TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            access_token TEXT NOT NULL,
+            refresh_token TEXT,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, provider)
+        )
+    """)
+
+    # Calendar Events table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS calendar_events (
+            id TEXT PRIMARY KEY,
+            event_id TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            participants TEXT,
+            platform TEXT,
+            meeting_id TEXT,
+            status TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    # Speaker Mappings table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS speaker_mappings (
+            meeting_id TEXT NOT NULL,
+            original_speaker TEXT NOT NULL,
+            mapped_speaker TEXT NOT NULL,
+            PRIMARY KEY (meeting_id, original_speaker)
+        )
+    """)
+
+    # Meeting Minutes table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS meeting_minutes (
+            meeting_id TEXT PRIMARY KEY,
+            content TEXT NOT NULL,
+            format TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    # Export Logs table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS export_logs (
+            id TEXT PRIMARY KEY,
+            meeting_id TEXT NOT NULL,
+            format TEXT NOT NULL,
             timestamp TEXT NOT NULL
         )
     """)
@@ -389,5 +446,128 @@ def clear_meeting_data(meeting_id: str):
     cursor.execute("DELETE FROM meeting_summaries WHERE meeting_id = ?", (meeting_id,))
     cursor.execute("DELETE FROM agent_events WHERE meeting_id = ?", (meeting_id,))
     cursor.execute("DELETE FROM meetings WHERE id = ?", (meeting_id,))
+    cursor.execute("DELETE FROM speaker_mappings WHERE meeting_id = ?", (meeting_id,))
+    cursor.execute("DELETE FROM meeting_minutes WHERE meeting_id = ?", (meeting_id,))
+    conn.commit()
+    conn.close()
+
+# --- CALENDAR ACCOUNTS ---
+def save_calendar_account(account: CalendarAccount):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO calendar_accounts (user_id, provider, access_token, refresh_token, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, provider) DO UPDATE SET
+            access_token=excluded.access_token,
+            refresh_token=excluded.refresh_token
+    """, (account.user_id, account.provider, account.access_token, account.refresh_token, account.created_at))
+    conn.commit()
+    conn.close()
+
+def get_calendar_account(user_id: str, provider: str) -> Optional[CalendarAccount]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM calendar_accounts WHERE user_id = ? AND provider = ?", (user_id, provider))
+    r = cursor.fetchone()
+    conn.close()
+    if not r:
+        return None
+    return CalendarAccount(**dict(r))
+
+def delete_calendar_account(user_id: str, provider: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM calendar_accounts WHERE user_id = ? AND provider = ?", (user_id, provider))
+    conn.commit()
+    conn.close()
+
+# --- CALENDAR EVENTS ---
+def save_calendar_event(event: CalendarEvent):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO calendar_events (id, event_id, title, start_time, end_time, participants, platform, meeting_id, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(event_id) DO UPDATE SET
+            title=excluded.title,
+            start_time=excluded.start_time,
+            end_time=excluded.end_time,
+            participants=excluded.participants,
+            platform=excluded.platform,
+            meeting_id=excluded.meeting_id,
+            status=excluded.status
+    """, (event.id, event.event_id, event.title, event.start_time, event.end_time, event.participants, event.platform, event.meeting_id, event.status, event.created_at))
+    conn.commit()
+    conn.close()
+
+def get_calendar_events() -> List[CalendarEvent]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM calendar_events ORDER BY start_time ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    return [CalendarEvent(**dict(r)) for r in rows]
+
+def link_calendar_event(event_id: str, meeting_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE calendar_events SET meeting_id = ? WHERE event_id = ?", (meeting_id, event_id))
+    conn.commit()
+    conn.close()
+
+# --- SPEAKER MAPPINGS ---
+def save_speaker_mapping(mapping: SpeakerMapping):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO speaker_mappings (meeting_id, original_speaker, mapped_speaker)
+        VALUES (?, ?, ?)
+        ON CONFLICT(meeting_id, original_speaker) DO UPDATE SET
+            mapped_speaker=excluded.mapped_speaker
+    """, (mapping.meeting_id, mapping.original_speaker, mapping.mapped_speaker))
+    conn.commit()
+    conn.close()
+
+def get_speaker_mappings(meeting_id: str) -> List[SpeakerMapping]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM speaker_mappings WHERE meeting_id = ?", (meeting_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [SpeakerMapping(**dict(r)) for r in rows]
+
+# --- MEETING MINUTES ---
+def save_meeting_minute(minute: MeetingMinute):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO meeting_minutes (meeting_id, content, format, created_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(meeting_id) DO UPDATE SET
+            content=excluded.content,
+            format=excluded.format
+    """, (minute.meeting_id, minute.content, minute.format, minute.created_at))
+    conn.commit()
+    conn.close()
+
+def get_meeting_minute(meeting_id: str) -> Optional[MeetingMinute]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM meeting_minutes WHERE meeting_id = ?", (meeting_id,))
+    r = cursor.fetchone()
+    conn.close()
+    if not r:
+        return None
+    return MeetingMinute(**dict(r))
+
+# --- EXPORT LOGS ---
+def log_export(export: ExportLog):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO export_logs (id, meeting_id, format, timestamp)
+        VALUES (?, ?, ?, ?)
+    """, (export.id, export.meeting_id, export.format, export.timestamp))
     conn.commit()
     conn.close()

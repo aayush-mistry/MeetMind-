@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Radio, Mic, UploadCloud, History, MessageSquare, BarChart, Settings } from 'lucide-react';
+import { LayoutDashboard, Radio, Mic, UploadCloud, History, MessageSquare, BarChart, Settings, Calendar, FileText } from 'lucide-react';
 
 export default function Sidebar() {
   const links = [
@@ -12,6 +12,8 @@ export default function Sidebar() {
     { name: 'AI Chat', path: '/chat', icon: MessageSquare },
     { name: 'Analytics', path: '/analytics', icon: BarChart },
     { name: 'Settings', path: '/settings', icon: Settings },
+    { name: 'Calendar', path: '/calendar', icon: Calendar },
+    { name: 'Meeting Minutes', path: '/minutes', icon: FileText },
   ];
 
   return (

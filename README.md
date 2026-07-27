@@ -8,29 +8,23 @@
 .
 ├─ backend/
 │   ├─ app/
-│   │   ├─ __init__.py
+│   │   ├─ services/
+│   │   │   ├─ ai/ (Multi-provider AI integrations)
 │   │   ├─ main.py
 │   │   ├─ models.py
-│   │   ├─ database.py
 │   │   ├─ extractor.py
-│   │   ├─ scheduler.py
-│   │   └─ ... (other modules)
-│   └─ meeting_agent.db
-├─ src/
-│   ├─ App.jsx
-│   ├─ index.jsx
-│   └─ ... (React components)
-├─ index.html
-├─ package.json
-├─ vite.config.js
-├─ README.md
-└─ .gitignore
+│   │   └─ ...
+│   └─ .env
+├─ frontend/
+│   ├─ src/
+│   ├─ package.json
+│   └─ vite.config.js
+└─ README.md
 ```
 
-- `backend/` – AI agents, business logic, and API server.
-- Frontend source files are at the project root (`src/` and config files).
+- `backend/` – Fast API server, Database, and plug-and-play AI service layer.
+- `frontend/` – React/Vite UI application.
 - `README.md` – Documentation.
-
 
 ## 🚀 Quick Start
 
@@ -55,7 +49,22 @@
 - Real‑time transcription and note‑taking.
 - Automatic meeting summary generation.
 - Follow‑up action item extraction.
+- **Provider-Agnostic AI**: Plug and play with Groq, Gemini, OpenAI, or OpenRouter.
 - Dark‑mode ready UI with smooth animations.
+
+## 🤖 AI Configuration
+The backend is completely AI-provider agnostic. Switch your AI backend instantly without modifying source code by updating `backend/.env`:
+
+```ini
+# Available options: groq, gemini, openai, openrouter
+AI_PROVIDER=groq
+
+# Corresponding API Keys
+GROQ_API_KEY=your_key_here
+GEMINI_API_KEY=your_key_here
+OPENAI_API_KEY=your_key_here
+OPENROUTER_API_KEY=your_key_here
+```
 
 ## 🛠️ Tech Stack
 
