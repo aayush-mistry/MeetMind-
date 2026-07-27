@@ -1,6 +1,9 @@
 import React from 'react';
+import { useTheme } from '../context/ThemeContext';
 
 export default function Settings() {
+  const { theme, toggleTheme } = useTheme();
+  
   return (
     <div className="max-w-2xl space-y-6">
       <h1 className="text-2xl font-bold text-slate-800">Settings</h1>
@@ -11,8 +14,11 @@ export default function Settings() {
             <h3 className="font-semibold text-slate-800">Dark Mode</h3>
             <p className="text-sm text-slate-500">Toggle system theme.</p>
           </div>
-          <button className="w-12 h-6 bg-slate-200 rounded-full relative transition-colors">
-            <div className="w-5 h-5 bg-white rounded-full absolute top-0.5 left-0.5 shadow-sm"></div>
+          <button 
+            onClick={toggleTheme}
+            className={`w-12 h-6 rounded-full relative transition-colors ${theme === 'dark' ? 'bg-indigo-600' : 'bg-slate-200'}`}
+          >
+            <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 shadow-sm transition-transform ${theme === 'dark' ? 'translate-x-6 left-0.5' : 'left-0.5'}`}></div>
           </button>
         </div>
         

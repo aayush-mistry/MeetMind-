@@ -37,3 +37,58 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94A3B8;
 }
+
+/* Global Dark Mode Overrides */
+html.dark {
+  background-color: #0F172A !important;
+  color: #F8FAFC !important;
+}
+
+html.dark body {
+  background-color: #0F172A !important;
+  color: #F8FAFC !important;
+}
+
+html.dark .bg-white {
+  background-color: #1E293B !important;
+  border-color: #334155 !important;
+}
+
+html.dark .text-slate-900,
+html.dark .text-slate-800 {
+  color: #F8FAFC !important;
+}
+
+html.dark .text-slate-700,
+html.dark .text-slate-600,
+html.dark .text-slate-500 {
+  color: #94A3B8 !important;
+}
+
+html.dark .bg-slate-50,
+html.dark .bg-slate-100 {
+  background-color: #0F172A !important;
+}
+
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-slate-300 {
+  border-color: #334155 !important;
+}
+
+html.dark .bg-indigo-50 {
+  background-color: #312E81 !important;
+  color: #A5B4FC !important;
+}
+
+html.dark aside,
+html.dark header,
+html.dark nav {
+  background-color: #1E293B !important;
+  border-color: #334155 !important;
+}
+
+html.dark .saas-card {
+  background-color: #1E293B !important;
+  border-color: #334155 !important;
+}
