@@ -168,7 +168,11 @@ export const MeetingProvider = ({ children }) => {
 
     return () => {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (ws) ws.close();
+      if (ws) {
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+      }
     };
   }, [meetingId]);
 
