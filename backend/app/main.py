@@ -230,53 +230,17 @@ async def process_uploaded_meeting(meeting_id: str, file_path: str, metadata: Di
     async def stage_update(stage: str, progress: float = 0.0):
         await broadcast(meeting_id, {"type": "stage_update", "stage": stage, "progress": progress})
 
-    await stage_update("Uploading Audio to Gemini", progress=0.1)
+    await stage_update("Transcribing Audio with AI Provider", progress=0.1)
     
     try:
-        from google import genai
-        import json
-        client = genai.Client()
-        
-        # Upload the file to Gemini
-        print(f"Uploading {file_path} to Gemini API...")
-        uploaded_file = await run_in_threadpool(client.files.upload, file=file_path)
+        from app.services.ai.provider_factory import get_ai_provider
+        provider = get_ai_provider()
         
         await stage_update("Transcribing and Translating", progress=0.3)
-        
-        # Request transcription and language detection
-        prompt = (
-            "Listen to this audio file. First, identify the original spoken language. "
-            "Then, transcribe the audio perfectly. If the audio is not in English, translate the transcription into English. "
-            "Return a JSON object with exactly two string keys: 'original_language' and 'english_transcript'."
-        )
-        
-        response = await run_in_threadpool(
-            client.models.generate_content,
-            model='gemini-1.5-flash',
-            contents=[prompt, uploaded_file]
-        )
-        
-        # Delete file from Gemini
-        await run_in_threadpool(client.files.delete, name=uploaded_file.name)
-        
-        # Parse JSON output
-        try:
-            # Clean markdown code blocks if any
-            text = response.text.strip()
-            if text.startswith("```json"):
-                text = text[7:]
-            if text.endswith("```"):
-                text = text[:-3]
-            data = json.loads(text.strip())
-            detected_lang = data.get("original_language", "Unknown")
-            transcript = data.get("english_transcript", "")
-        except Exception as e:
-            print("Failed to parse Gemini JSON:", e)
-            detected_lang = "Unknown"
-            transcript = response.text
+        detected_lang, transcript = await provider.transcribe_and_translate(file_path)
 
     except Exception as e:
-        print(f"[Gemini Audio] Transcription failed: {e}")
+        print(f"[Audio Processing] Transcription failed: {e}")
         detected_lang = "en"
         transcript = f"Transcription failed due to API error: {str(e)}"
 
@@ -483,8 +447,8 @@ class ChatQuery(BaseModel):
 @app.post("/api/chat")
 async def chat_endpoint(payload: ChatQuery):
     try:
-        from google import genai
-        client = genai.Client()
+        from app.services.ai.provider_factory import get_ai_provider
+        provider = get_ai_provider()
         
         # Get all meeting transcripts as context
         meetings = database.get_meetings()
@@ -492,14 +456,9 @@ async def chat_endpoint(payload: ChatQuery):
         for m in meetings:
             context += f"Meeting {m.title}:\n{m.transcript}\n\n"
             
-        prompt = f"Use the following meeting transcripts to answer the user's question.\n\n{context}\n\nUser Question: {payload.query}"
-        
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=prompt
-        )
-        return {"answer": response.text}
+        answer = await provider.chat(context, payload.query)
+        return {"answer": answer}
     except Exception as e:
         print("Chat Error:", e)
-        return {"answer": f"I received your question: '{payload.query}'. However, I was unable to connect to the Gemini API to search your transcripts. Please check API keys."}
+        return {"answer": f"I received your question: '{payload.query}'. However, I was unable to process it with the AI provider. Error: {str(e)}"}
 

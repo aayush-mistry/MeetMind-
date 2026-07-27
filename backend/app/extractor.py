@@ -6,46 +6,7 @@ import asyncio
 from typing import List, Dict, Any, Tuple
 from app.models import ActionItem, Decision, RiskBlocker, MeetingSummary
 
-SYSTEM_EXTRACTION_PROMPT = """
-You are an expert AI Meeting Intelligence Agent. Given a meeting transcript, extract:
-1. summary: A concise 2-3 sentence overview of the meeting discussions and outcomes.
-2. action_items: A list of actionable commitments made by team members.
-   For each action item:
-   - task_title: A short 4-8 word action title (Do NOT use full transcript sentences).
-   - task_description: Contextual breakdown of what needs to be done.
-   - owner: Responsible person's first name, or "Unassigned" if unclear/ambiguous.
-   - deadline: Explicit date/timeframe mentioned (e.g., "2026-07-28" or "July 28"), or null.
-   - priority: "low" | "medium" | "high" | "critical" (infer from urgency words like urgent/must/critical).
-   - confidence: A float from 0.0 to 1.0 representing extraction certainty.
-   - source_quote: The exact line/sentence from the transcript.
-   - needs_review: true if confidence < 0.70 or owner/deadline is ambiguous/unclear, else false.
-   - dependencies: List of string names/tasks that this action depends on (or empty list).
-3. decisions: Explicit decisions agreed upon in the meeting.
-   - decision: Clear statement of what was decided.
-   - decided_by: Person or group responsible (e.g., "Product Lead", "Team", "Alex").
-   - source_quote: Verbatim sentence from transcript.
-   - confidence: Float 0.0 to 1.0.
-4. risks_blockers: Potential risks or active blockers mentioned.
-   - type: "risk" or "blocker".
-   - description: Explanation of the risk/blocker.
-   - severity: "low" | "medium" | "high" | "critical".
-   - blocked_task: Task title being impacted if mentioned, or null.
-   - depends_on: Person or prerequisite task causing the bottleneck, or null.
-   - source_quote: Verbatim sentence.
-   - confidence: Float 0.0 to 1.0.
 
-Return ONLY valid JSON matching this exact structure:
-{
-  "summary": "...",
-  "action_items": [...],
-  "decisions": [...],
-  "risks_blockers": [...]
-}
-No extra commentary or markdown backticks outside standard json.
-
-Meeting Transcript:
-{transcript}
-"""
 
 async def extract_meeting_intelligence(
     meeting_id: str, 
@@ -56,37 +17,12 @@ async def extract_meeting_intelligence(
         empty_summary = MeetingSummary(meeting_id=meeting_id, summary_text="No discussion recorded.", action_items_count=0, decisions_count=0, risks_count=0, blockers_count=0)
         return empty_summary, [], [], []
 
-    api_key = os.environ.get("GEMINI_API_KEY")
-    data = None
-
-    if api_key:
-        try:
-            from google import genai
-            client = genai.Client(api_key=api_key)
-            prompt = SYSTEM_EXTRACTION_PROMPT.format(transcript=transcript_text)
-            
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: client.models.generate_content(
-                    model="gemini-1.5-flash",
-                    contents=prompt,
-                )
-            )
-            raw_text = response.text.strip()
-            if raw_text.startswith("```json"):
-                raw_text = raw_text[7:]
-            if raw_text.startswith("```"):
-                raw_text = raw_text[3:]
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3]
-            raw_text = raw_text.strip()
-            
-            data = json.loads(raw_text)
-        except Exception as e:
-            print(f"[Extractor] Gemini API call error/fallback: {e}")
-            data = _heuristic_nlp_extraction(transcript_text)
-    else:
+    try:
+        from app.services.ai.provider_factory import get_ai_provider
+        provider = get_ai_provider()
+        data = await provider.extract_meeting_intelligence(transcript_text)
+    except Exception as e:
+        print(f"[Extractor] AI API call error/fallback: {e}")
         data = _heuristic_nlp_extraction(transcript_text)
 
     # Parse Action Items
