@@ -20,7 +20,7 @@ Marcus (QA Lead): QA automation script execution is pending load testing. Marcus
 Riya: Also urgent: we must rotate our production API keys before launch. Riya will update the environment credentials by Sunday, July 27.
 
 Alex: Decision confirmed: Product v2.0 launch remains scheduled for July 31. Let's touch base again on Wednesday. Thanks team!
-"""
+""",
     },
     "sprint_planning": {
         "title": "Engineering Sprint Planning",
@@ -39,7 +39,7 @@ Elena: Decision: We will use SQLite for local persistence during the hackathon a
 Tom: Maybe someone from design can finish the landing page hero graphics next week, but it's unclear who has bandwidth.
 
 Vikram: Blocker: Tom cannot finish UI notification toast integration until Priya completes the deployment configuration.
-"""
+""",
     },
     "executive_briefing": {
         "title": "Q3 Executive Strategy Sync",
@@ -56,6 +56,6 @@ Jessica (VP Product): Jessica will publish the customer feedback report and feat
 Jonathan: Decision: Executive committee approves the $500k cloud infrastructure expansion budget for Q4.
 
 Samantha: Risk: External cybersecurity firm audit could delay public launching if vulnerability remediation takes more than two weeks.
-"""
-    }
+""",
+    },
 }

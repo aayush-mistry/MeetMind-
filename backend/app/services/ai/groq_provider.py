@@ -4,6 +4,7 @@ from groq import AsyncGroq
 from app.services.ai.base_provider import AIService, ProviderError
 from app.services.ai.prompts import SYSTEM_EXTRACTION_PROMPT, CHAT_PROMPT_TEMPLATE
 
+
 class GroqProvider(AIService):
     def __init__(self):
         api_key = os.environ.get("GROQ_API_KEY")
@@ -19,13 +20,11 @@ class GroqProvider(AIService):
         try:
             response = await self.client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.0
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
             )
             raw_text = response.choices[0].message.content.strip()
-            
+
             if raw_text.startswith("```json"):
                 raw_text = raw_text[7:]
             if raw_text.startswith("```"):
@@ -33,7 +32,7 @@ class GroqProvider(AIService):
             if raw_text.endswith("```"):
                 raw_text = raw_text[:-3]
             raw_text = raw_text.strip()
-            
+
             return json.loads(raw_text)
         except Exception as e:
             raise ProviderError(f"Groq API error during extraction: {str(e)}")
@@ -55,7 +54,7 @@ class GroqProvider(AIService):
             response = await self.client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.7
+                temperature=0.7,
             )
             return response.choices[0].message.content
         except Exception as e:

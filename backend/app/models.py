@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
 from datetime import datetime
 
+
 class ActionItem(BaseModel):
     id: str
     meeting_id: str
@@ -10,7 +11,15 @@ class ActionItem(BaseModel):
     owner: str = "Unassigned"
     deadline: Optional[str] = None
     priority: Literal["low", "medium", "high", "critical"] = "medium"
-    status: Literal["pending", "due_soon", "reminded", "overdue", "needs_review", "at_risk", "completed"] = "pending"
+    status: Literal[
+        "pending",
+        "due_soon",
+        "reminded",
+        "overdue",
+        "needs_review",
+        "at_risk",
+        "completed",
+    ] = "pending"
     confidence: float = 0.90
     source_quote: str = ""
     needs_review: bool = False
@@ -21,6 +30,7 @@ class ActionItem(BaseModel):
     last_reminder_at: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
+
 class ActionItemCreate(BaseModel):
     task_title: str
     task_description: Optional[str] = ""
@@ -28,14 +38,26 @@ class ActionItemCreate(BaseModel):
     deadline: Optional[str] = None
     priority: Optional[Literal["low", "medium", "high", "critical"]] = "medium"
 
+
 class ActionItemUpdate(BaseModel):
     task_title: Optional[str] = None
     task_description: Optional[str] = None
     owner: Optional[str] = None
     deadline: Optional[str] = None
     priority: Optional[Literal["low", "medium", "high", "critical"]] = None
-    status: Optional[Literal["pending", "due_soon", "reminded", "overdue", "needs_review", "at_risk", "completed"]] = None
+    status: Optional[
+        Literal[
+            "pending",
+            "due_soon",
+            "reminded",
+            "overdue",
+            "needs_review",
+            "at_risk",
+            "completed",
+        ]
+    ] = None
     needs_review: Optional[bool] = None
+
 
 class Decision(BaseModel):
     id: str
@@ -45,6 +67,7 @@ class Decision(BaseModel):
     source_quote: str = ""
     confidence: float = 0.95
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
 
 class RiskBlocker(BaseModel):
     id: str
@@ -58,6 +81,7 @@ class RiskBlocker(BaseModel):
     confidence: float = 0.90
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
+
 class MeetingSummary(BaseModel):
     meeting_id: str
     summary_text: str
@@ -67,12 +91,14 @@ class MeetingSummary(BaseModel):
     blockers_count: int = 0
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
+
 class Meeting(BaseModel):
     id: str
     title: str
     description: Optional[str] = ""
     transcript: str
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
 
 class MeetingTopic(BaseModel):
     id: str
@@ -88,8 +114,10 @@ class MeetingTopic(BaseModel):
     transcript_range: str = ""
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
+
 class TranscriptSubmission(BaseModel):
     text: str
+
 
 class AgentEvent(BaseModel):
     id: str
@@ -101,12 +129,14 @@ class AgentEvent(BaseModel):
     target: str = ""
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
 
+
 class CalendarAccount(BaseModel):
     user_id: str
     provider: Literal["google", "outlook"]
     access_token: str
     refresh_token: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
 
 class CalendarEvent(BaseModel):
     id: str
@@ -120,16 +150,19 @@ class CalendarEvent(BaseModel):
     status: str = "scheduled"
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
+
 class SpeakerMapping(BaseModel):
     meeting_id: str
     original_speaker: str
     mapped_speaker: str
+
 
 class MeetingMinute(BaseModel):
     meeting_id: str
     content: str
     format: str = "json"
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
 
 class ExportLog(BaseModel):
     id: str
