@@ -6,6 +6,7 @@ import ActionItemsTable from '../components/ActionItemsTable';
 import ReminderFeed from '../components/ReminderFeed';
 import TaskDetailDrawer from '../components/TaskDetailDrawer';
 import SpeakersList from '../components/SpeakersList';
+import TopicsDashboard from './TopicsDashboard';
 
 const API_BASE = '/api';
 
@@ -21,6 +22,7 @@ export default function LiveMeeting() {
   } = useMeeting();
 
   const [selectedTask, setSelectedTask] = useState(null);
+  const [activeTab, setActiveTab] = useState('overview');
 
   // Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -221,23 +223,54 @@ export default function LiveMeeting() {
 
       {summary && <MeetingSummaryCard summary={summary} />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <ActionItemsTable
-            items={items}
-            decisions={decisions}
-            risksBlockers={risksBlockers}
-            onSelectItem={(item) => setSelectedTask(item)}
-            onMarkComplete={handleMarkComplete}
-            onConfirmItem={handleConfirmItem}
-            onAddManualItem={handleAddManualItem}
-          />
-        </div>
-        <div className="lg:col-span-1 space-y-6">
-          <ReminderFeed events={agentEvents} />
-          {meetingId && <SpeakersList meetingId={meetingId} />}
-        </div>
+      <div className="border-b border-slate-200">
+        <nav className="-mb-px flex gap-6">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'overview'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            Overview & Actions
+          </button>
+          <button
+            onClick={() => setActiveTab('topics')}
+            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'topics'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            Topics
+          </button>
+        </nav>
       </div>
+
+      {activeTab === 'overview' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <ActionItemsTable
+              items={items}
+              decisions={decisions}
+              risksBlockers={risksBlockers}
+              onSelectItem={(item) => setSelectedTask(item)}
+              onMarkComplete={handleMarkComplete}
+              onConfirmItem={handleConfirmItem}
+              onAddManualItem={handleAddManualItem}
+            />
+          </div>
+          <div className="lg:col-span-1 space-y-6">
+            <ReminderFeed events={agentEvents} />
+            {meetingId && <SpeakersList meetingId={meetingId} />}
+          </div>
+        </div>
+      ) : (
+        <div className="-mx-6">
+          <TopicsDashboard />
+        </div>
+      )}
 
       <TaskDetailDrawer
         item={selectedTask}

@@ -14,6 +14,7 @@ export const MeetingProvider = ({ children }) => {
   const [items, setItems] = useState([]);
   const [decisions, setDecisions] = useState([]);
   const [risksBlockers, setRisksBlockers] = useState([]);
+  const [topics, setTopics] = useState([]);
   const [agentEvents, setAgentEvents] = useState([]);
 
   const [wsConnected, setWsConnected] = useState(false);
@@ -30,6 +31,7 @@ export const MeetingProvider = ({ children }) => {
         if (Array.isArray(data.action_items)) setItems(data.action_items);
         if (Array.isArray(data.decisions)) setDecisions(data.decisions);
         if (Array.isArray(data.risks_blockers)) setRisksBlockers(data.risks_blockers);
+        if (Array.isArray(data.topics)) setTopics(data.topics);
         if (Array.isArray(data.events)) setAgentEvents(data.events);
       })
       .catch(err => console.log('Fetch meeting data error:', err));
@@ -76,6 +78,17 @@ export const MeetingProvider = ({ children }) => {
             case 'risk_extracted':
               if (msg.data && msg.data.id) {
                 setRisksBlockers(prev => [msg.data, ...prev]);
+              }
+              break;
+            case 'topic_extracted':
+              if (msg.data && msg.data.id) {
+                setTopics(prev => {
+                  const exists = prev.some(t => t.id === msg.data.id);
+                  if (exists) {
+                    return prev.map(t => t.id === msg.data.id ? msg.data : t);
+                  }
+                  return [...prev, msg.data];
+                });
               }
               break;
             case 'item_extracted':
@@ -141,6 +154,7 @@ export const MeetingProvider = ({ children }) => {
               setItems([]);
               setDecisions([]);
               setRisksBlockers([]);
+              setTopics([]);
               setAgentEvents([]);
               setIsExtracting(false);
               setAnalysisStageIndex(-1);
@@ -188,6 +202,8 @@ export const MeetingProvider = ({ children }) => {
       setDecisions,
       risksBlockers,
       setRisksBlockers,
+      topics,
+      setTopics,
       agentEvents,
       setAgentEvents,
       wsConnected,

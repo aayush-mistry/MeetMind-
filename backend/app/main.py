@@ -110,13 +110,15 @@ def get_meeting_full(meeting_id: str):
     decisions = database.get_decisions(meeting_id)
     risks_blockers = database.get_risks_blockers(meeting_id)
     events = database.get_agent_events(meeting_id)
+    topics = database.get_topics(meeting_id)
     return {
         "meeting": m.dict() if m else None,
         "summary": summary.dict() if summary else None,
         "action_items": [i.dict() for i in items],
         "decisions": [d.dict() for d in decisions],
         "risks_blockers": [rb.dict() for rb in risks_blockers],
-        "events": [e.dict() for e in events]
+        "events": [e.dict() for e in events],
+        "topics": [t.dict() for t in topics]
     }
 
 @app.post("/api/transcript/{meeting_id}")
@@ -165,7 +167,7 @@ async def process_agentic_pipeline(meeting_id: str, text: str):
             await asyncio.sleep(0.2)
 
         # Perform AI extraction
-        summary, items, decisions, risks_blockers = await extractor.extract_meeting_intelligence(meeting_id, text)
+        summary, items, decisions, risks_blockers, topics = await extractor.extract_meeting_intelligence(meeting_id, text)
     
         # Save summary
         await run_in_threadpool(database.save_meeting_summary, summary)
@@ -209,6 +211,15 @@ async def process_agentic_pipeline(meeting_id: str, text: str):
             })
             await asyncio.sleep(0.25)
 
+        # Save Topics line by line
+        for t in topics:
+            await run_in_threadpool(database.save_topic, t)
+            await broadcast(meeting_id, {
+                "type": "topic_extracted",
+                "data": t.dict()
+            })
+            await asyncio.sleep(0.15)
+
         # Broadcast final stage
         await broadcast(meeting_id, {
             "type": "analysis_stage",
@@ -221,6 +232,7 @@ async def process_agentic_pipeline(meeting_id: str, text: str):
             "total_items": len(items),
             "total_decisions": len(decisions),
             "total_risks": len(risks_blockers),
+            "total_topics": len(topics),
             "meeting_id": meeting_id
         })
     
@@ -475,11 +487,15 @@ async def chat_endpoint(payload: ChatQuery):
         from app.services.ai.provider_factory import get_ai_provider
         provider = get_ai_provider()
         
-        # Get all meeting transcripts as context
+        # Get all meeting transcripts and topics as context
         meetings = database.get_meetings()
-        context = "Meeting Transcripts:\n"
+        context = "Meetings Content:\n"
         for m in meetings:
-            context += f"Meeting {m.title}:\n{m.transcript}\n\n"
+            topics = database.get_topics(m.id)
+            topics_str = ""
+            if topics:
+                topics_str = "\nExtracted Topics:\n" + "\n".join([f"- {t.topic_name} ({t.start_time}-{t.end_time}): {t.summary}. Keywords: {', '.join(t.keywords)}" for t in topics])
+            context += f"Meeting {m.title}:\nTranscript:\n{m.transcript}\n{topics_str}\n\n"
             
         answer = await provider.chat(context, payload.query)
         return {"answer": answer}
@@ -609,6 +625,7 @@ async def generate_meeting_minutes(meeting_id: str):
     - discussion (list of key points)
     - action_items (list of objects with 'task', 'owner', 'deadline')
     - decisions (list)
+    - topics_discussed (list of objects with 'topic', 'summary', and 'keywords')
     """
     
     try:

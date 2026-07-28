@@ -2,7 +2,7 @@ import sqlite3
 import json
 import os
 from typing import List, Optional, Dict, Any
-from app.models import ActionItem, Decision, RiskBlocker, MeetingSummary, Meeting, AgentEvent, CalendarAccount, CalendarEvent, SpeakerMapping, MeetingMinute, ExportLog
+from app.models import ActionItem, Decision, RiskBlocker, MeetingSummary, Meeting, AgentEvent, CalendarAccount, CalendarEvent, SpeakerMapping, MeetingMinute, ExportLog, MeetingTopic
 DB_FILE = os.path.join(os.path.dirname(__file__), "..", "meeting_agent.db")
 
 def get_db_connection():
@@ -159,6 +159,24 @@ def init_db():
         )
     """)
 
+    # Meeting Topics table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS meeting_topics (
+            id TEXT PRIMARY KEY,
+            meeting_id TEXT NOT NULL,
+            topic_name TEXT NOT NULL,
+            start_time TEXT,
+            end_time TEXT,
+            duration TEXT,
+            summary TEXT,
+            keywords TEXT,
+            speakers TEXT,
+            confidence REAL DEFAULT 0.90,
+            transcript_range TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+
     # Export Logs table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS export_logs (
@@ -174,6 +192,7 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_decisions_meeting_id ON decisions(meeting_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_risks_blockers_meeting_id ON risks_blockers(meeting_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_events_meeting_id ON agent_events(meeting_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_meeting_topics_meeting_id ON meeting_topics(meeting_id)")
     
     conn.commit()
     conn.close()
@@ -245,6 +264,57 @@ def get_meeting_summary(meeting_id: str) -> Optional[MeetingSummary]:
         blockers_count=r["blockers_count"],
         created_at=r["created_at"]
     )
+
+# --- TOPICS ---
+def save_topic(topic: MeetingTopic):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO meeting_topics (id, meeting_id, topic_name, start_time, end_time, duration, summary, keywords, speakers, confidence, transcript_range, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            topic_name=excluded.topic_name,
+            start_time=excluded.start_time,
+            end_time=excluded.end_time,
+            duration=excluded.duration,
+            summary=excluded.summary,
+            keywords=excluded.keywords,
+            speakers=excluded.speakers,
+            confidence=excluded.confidence,
+            transcript_range=excluded.transcript_range
+    """, (topic.id, topic.meeting_id, topic.topic_name, topic.start_time, topic.end_time, topic.duration, topic.summary, json.dumps(topic.keywords), json.dumps(topic.speakers), topic.confidence, topic.transcript_range, topic.created_at))
+    conn.commit()
+    conn.close()
+
+def get_topics(meeting_id: str) -> List[MeetingTopic]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM meeting_topics WHERE meeting_id = ? ORDER BY created_at ASC", (meeting_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    topics = []
+    for r in rows:
+        keywords = []
+        speakers = []
+        try:
+            keywords = json.loads(r["keywords"])
+            speakers = json.loads(r["speakers"])
+        except:
+            pass
+        topics.append(MeetingTopic(
+            id=r["id"], meeting_id=r["meeting_id"], topic_name=r["topic_name"],
+            start_time=r["start_time"], end_time=r["end_time"], duration=r["duration"],
+            summary=r["summary"], keywords=keywords, speakers=speakers, confidence=r["confidence"],
+            transcript_range=r["transcript_range"], created_at=r["created_at"]
+        ))
+    return topics
+
+def delete_topics(meeting_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM meeting_topics WHERE meeting_id = ?", (meeting_id,))
+    conn.commit()
+    conn.close()
 
 # --- ACTION ITEMS ---
 def save_action_item(item: ActionItem):
@@ -443,8 +513,9 @@ def clear_meeting_data(meeting_id: str):
     cursor.execute("DELETE FROM action_items WHERE meeting_id = ?", (meeting_id,))
     cursor.execute("DELETE FROM decisions WHERE meeting_id = ?", (meeting_id,))
     cursor.execute("DELETE FROM risks_blockers WHERE meeting_id = ?", (meeting_id,))
-    cursor.execute("DELETE FROM meeting_summaries WHERE meeting_id = ?", (meeting_id,))
     cursor.execute("DELETE FROM agent_events WHERE meeting_id = ?", (meeting_id,))
+    cursor.execute("DELETE FROM meeting_summaries WHERE meeting_id = ?", (meeting_id,))
+    cursor.execute("DELETE FROM meeting_topics WHERE meeting_id = ?", (meeting_id,))
     cursor.execute("DELETE FROM meetings WHERE id = ?", (meeting_id,))
     cursor.execute("DELETE FROM speaker_mappings WHERE meeting_id = ?", (meeting_id,))
     cursor.execute("DELETE FROM meeting_minutes WHERE meeting_id = ?", (meeting_id,))

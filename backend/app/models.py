@@ -74,6 +74,20 @@ class Meeting(BaseModel):
     transcript: str
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
+class MeetingTopic(BaseModel):
+    id: str
+    meeting_id: str
+    topic_name: str
+    start_time: str = ""
+    end_time: str = ""
+    duration: str = ""
+    summary: str = ""
+    keywords: List[str] = Field(default_factory=list)
+    speakers: List[str] = Field(default_factory=list)
+    confidence: float = 0.90
+    transcript_range: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
 class TranscriptSubmission(BaseModel):
     text: str
 

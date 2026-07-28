@@ -11,6 +11,7 @@ import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import CalendarDashboard from './pages/CalendarDashboard';
 import MeetingMinutes from './pages/MeetingMinutes';
+import TopicsDashboard from './pages/TopicsDashboard';
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="calendar" element={<CalendarDashboard />} />
         <Route path="minutes" element={<MeetingMinutes />} />
         <Route path="minutes/:id" element={<MeetingMinutes />} />
+        <Route path="topics" element={<TopicsDashboard />} />
       </Route>
     </Routes>
   );

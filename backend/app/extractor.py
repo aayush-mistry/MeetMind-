@@ -4,18 +4,18 @@ import re
 import uuid
 import asyncio
 from typing import List, Dict, Any, Tuple
-from app.models import ActionItem, Decision, RiskBlocker, MeetingSummary
+from app.models import ActionItem, Decision, RiskBlocker, MeetingSummary, MeetingTopic
 
 
 
 async def extract_meeting_intelligence(
     meeting_id: str, 
     transcript_text: str
-) -> Tuple[MeetingSummary, List[ActionItem], List[Decision], List[RiskBlocker]]:
+) -> Tuple[MeetingSummary, List[ActionItem], List[Decision], List[RiskBlocker], List[MeetingTopic]]:
     
     if not transcript_text or not transcript_text.strip():
         empty_summary = MeetingSummary(meeting_id=meeting_id, summary_text="No discussion recorded.", action_items_count=0, decisions_count=0, risks_count=0, blockers_count=0)
-        return empty_summary, [], [], []
+        return empty_summary, [], [], [], []
 
     try:
         from app.services.ai.provider_factory import get_ai_provider
@@ -116,7 +116,25 @@ async def extract_meeting_intelligence(
         blockers_count=blockers_count
     )
 
-    return summary, action_items, decisions, risks_blockers
+    # Parse Topics
+    raw_topics = data.get("topics", [])
+    topics: List[MeetingTopic] = []
+    for t in raw_topics:
+        topics.append(MeetingTopic(
+            id=f"topic_{str(uuid.uuid4())[:6]}",
+            meeting_id=meeting_id,
+            topic_name=t.get("topic_name", "Discussion Topic"),
+            start_time=t.get("start_time", ""),
+            end_time=t.get("end_time", ""),
+            duration=t.get("duration", ""),
+            summary=t.get("summary", ""),
+            keywords=t.get("keywords", []),
+            speakers=t.get("speakers", []),
+            confidence=float(t.get("confidence", 0.90)),
+            transcript_range=t.get("transcript_range", "")
+        ))
+
+    return summary, action_items, decisions, risks_blockers, topics
 
 def _heuristic_nlp_extraction(text: str) -> Dict[str, Any]:
     """Smart heuristic fallback parser if API key is not present."""
@@ -203,12 +221,24 @@ def _heuristic_nlp_extraction(text: str) -> Dict[str, Any]:
                 "needs_review": needs_review,
                 "dependencies": []
             })
-
-    summary_text = f"Transcription and extraction failed. Raw text received: '{text[:100]}...'"
-    
+            
+    # Fallback topics
+    topics = [{
+        "topic_name": "General Discussion",
+        "start_time": "00:00",
+        "end_time": "00:00",
+        "duration": "0m",
+        "summary": "General meeting discussion.",
+        "keywords": ["Discussion"],
+        "speakers": [],
+        "confidence": 0.5,
+        "transcript_range": ""
+    }]
+            
     return {
-        "summary": summary_text,
+        "summary": "Meeting discussion recorded and heuristically parsed. Please configure an AI provider for better insights.",
         "action_items": action_items,
         "decisions": decisions,
-        "risks_blockers": risks_blockers
+        "risks_blockers": risks_blockers,
+        "topics": topics
     }
