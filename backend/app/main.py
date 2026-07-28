@@ -612,20 +612,31 @@ async def generate_meeting_minutes(meeting_id: str):
         
     provider = get_ai_provider()
     
-    # Simple prompt for generating minutes (would typically be in prompts.py)
+    # Prompt for generating minutes
     prompt = """
     Generate a professional Meeting Minutes document from the following transcript.
-    Format as JSON with these keys: 
-    - title
-    - date (use today's date)
-    - time
-    - duration (estimate)
-    - participants (list based on speakers)
-    - executive_summary
-    - discussion (list of key points)
-    - action_items (list of objects with 'task', 'owner', 'deadline')
-    - decisions (list)
-    - topics_discussed (list of objects with 'topic', 'summary', and 'keywords')
+    Format the output as clean Markdown. 
+    
+    Structure the document as follows:
+    # Meeting Minutes: [Title]
+    **Date:** (use today's date)
+    **Time:** 
+    **Duration:** (estimate)
+    **Participants:** (list based on speakers)
+
+    ## Executive Summary
+    (A concise 2-3 sentence overview of the meeting's main purpose and overarching outcome)
+
+    ## Key Discussion Topics
+    (Organized chronologically or by theme. Bulleted highlights of what was discussed)
+
+    ## Decisions Made
+    (Explicitly documented resolutions)
+
+    ## Action Items
+    (For each item include Task, Owner, and Deadline)
+    
+    IMPORTANT: DO NOT OUTPUT JSON. RETURN ONLY RAW MARKDOWN TEXT.
     """
     
     try:
@@ -634,8 +645,8 @@ async def generate_meeting_minutes(meeting_id: str):
         # Save generated minutes
         minute = MeetingMinute(
             meeting_id=meeting_id,
-            content=response, # In reality, parse json and format properly
-            format="json"
+            content=response,
+            format="markdown"
         )
         await run_in_threadpool(database.save_meeting_minute, minute)
         return {"status": "success", "minutes": minute.dict()}

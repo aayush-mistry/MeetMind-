@@ -138,6 +138,13 @@ export default function MeetingMinutes() {
                 <h4 className="font-medium text-green-800">Generated Successfully</h4>
                 <p className="text-xs text-green-700 mt-1">Last updated: {new Date(minutes.created_at).toLocaleString()}</p>
               </div>
+              <button 
+                onClick={handleGenerate} 
+                disabled={loading}
+                className="w-full mt-4 flex justify-center items-center gap-2 py-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-medium transition-colors"
+              >
+                {loading ? 'Regenerating...' : 'Regenerate Minutes'}
+              </button>
             </div>
           </div>
         </div>
