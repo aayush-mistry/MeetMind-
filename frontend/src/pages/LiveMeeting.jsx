@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useMeeting } from '../context/MeetingContext';
 import MeetingSummaryCard from '../components/MeetingSummaryCard';
 import ActionItemsTable from '../components/ActionItemsTable';
@@ -9,21 +10,125 @@ import SpeakersList from '../components/SpeakersList';
 const API_BASE = '/api';
 
 export default function LiveMeeting() {
+  const location = useLocation();
+  const event = location.state?.event;
+
   const {
-    meetingId,
-    summary,
-    items,
-    decisions,
-    risksBlockers,
-    agentEvents,
-    isExtracting,
-    analysisStageIndex,
-    wsConnected,
-    setIsExtracting,
-    setAnalysisStageIndex
+    meetingId, setMeetingId,
+    summary, items, decisions, risksBlockers, agentEvents,
+    isExtracting, analysisStageIndex, wsConnected,
+    setIsExtracting, setAnalysisStageIndex
   } = useMeeting();
 
   const [selectedTask, setSelectedTask] = useState(null);
+
+  // Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const timerRef = useRef(null);
+  const initializedEventIdRef = useRef(null);
+
+  useEffect(() => {
+    if (event && event.id !== initializedEventIdRef.current) {
+      initializedEventIdRef.current = event.id;
+      initLiveMeeting(event);
+    }
+    
+    return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [event]);
+
+  const initLiveMeeting = async (evt) => {
+    try {
+      const res = await fetch(`${API_BASE}/meeting/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: evt.title, description: `Live meeting for ${evt.title} with ${evt.participants || 'participants'}` })
+      });
+      
+      if (!res.ok) throw new Error("Failed to initialize meeting");
+      const data = await res.json();
+      const newMeetingId = data.meeting_id;
+      
+      setMeetingId(newMeetingId); 
+
+      if (evt.event_id || evt.id) {
+         const eventId = evt.event_id || evt.id;
+         await fetch(`${API_BASE}/calendar/link/${newMeetingId}/${eventId}`, { method: 'POST' });
+      }
+
+      startRecording();
+    } catch (err) {
+      console.error("Initialization error:", err);
+      alert("Failed to start live meeting: " + err.message);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      
+      timerRef.current = setInterval(() => {
+        setDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Could not access microphone:', err);
+      alert("Could not access microphone: " + err.message);
+    }
+  };
+
+  const stopMeeting = async () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+      clearInterval(timerRef.current);
+      
+      setIsProcessing(true);
+      
+      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      const file = new File([blob], 'live_recording.webm', { type: 'audio/webm' });
+      const form = new FormData();
+      form.append('file', file);
+      form.append('meeting_id', meetingId);
+
+      try {
+        const res = await fetch(`${API_BASE}/meeting/upload`, {
+          method: 'POST',
+          body: form,
+        });
+        if (!res.ok) throw new Error(await res.text());
+      } catch (err) {
+        console.error('Upload error:', err);
+        alert(`Upload failed: ${err.message}`);
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  const formatTime = (secs) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+
 
   const handleSubmitTranscript = async (text) => {
     setIsExtracting(true);
@@ -73,12 +178,44 @@ export default function LiveMeeting() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">Live Meeting: <span className="text-indigo-600">{meetingId}</span></h1>
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <div className={`w-2.5 h-2.5 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
-          <span className={wsConnected ? 'text-emerald-600' : 'text-red-500'}>
-            {wsConnected ? 'Connected to Agent' : 'Disconnected'}
-          </span>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">
+             {event ? `Live: ${event.title}` : `Live Meeting: `}
+             {meetingId && <span className="text-indigo-600 text-sm ml-2">({meetingId})</span>}
+          </h1>
+          {event && (
+             <p className="text-sm text-slate-500 mt-1">
+               Participants: {event.participants || 'None'} | Platform: {event.platform}
+             </p>
+          )}
+        </div>
+        <div className="flex items-center gap-4">
+          {(isRecording || isProcessing) && (
+            <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm">
+               {isRecording && !isProcessing && (
+                  <div className="flex items-center gap-2 text-rose-600 font-medium">
+                    <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></div>
+                    {formatTime(duration)}
+                  </div>
+               )}
+               {isProcessing && (
+                  <div className="text-indigo-600 font-medium animate-pulse text-sm">
+                    Processing AI...
+                  </div>
+               )}
+               {isRecording && !isProcessing && (
+                 <button onClick={stopMeeting} className="text-sm bg-rose-100 hover:bg-rose-200 text-rose-700 px-3 py-1 rounded-md transition-colors">
+                   Stop Meeting
+                 </button>
+               )}
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <div className={`w-2.5 h-2.5 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
+            <span className={wsConnected ? 'text-emerald-600' : 'text-red-500'}>
+              {wsConnected ? 'Agent Connected' : 'Disconnected'}
+            </span>
+          </div>
         </div>
       </div>
 

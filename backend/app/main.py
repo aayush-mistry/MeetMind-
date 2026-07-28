@@ -2,7 +2,7 @@ import asyncio
 import json
 import uuid
 from typing import Dict, List, Optional
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile, BackgroundTasks, Form
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 from datetime import datetime
@@ -21,6 +21,11 @@ from app.models import (
     ActionItem, ActionItemCreate, ActionItemUpdate, Decision, RiskBlocker, 
     MeetingSummary, Meeting, TranscriptSubmission, AgentEvent
 )
+from pydantic import BaseModel
+
+class MeetingInit(BaseModel):
+    title: str
+    description: Optional[str] = ""
 from app.samples import SAMPLE_TRANSCRIPTS
 
 app = FastAPI(
@@ -84,6 +89,19 @@ def get_sample_transcripts():
 def list_meetings():
     return database.get_meetings()
 
+@app.post("/api/meeting/init")
+async def init_meeting(payload: MeetingInit):
+    meeting_id = str(uuid.uuid4())
+    meeting = Meeting(
+        id=meeting_id,
+        title=payload.title,
+        description=payload.description,
+        transcript="", 
+        created_at=datetime.utcnow().isoformat()
+    )
+    await run_in_threadpool(database.save_meeting, meeting)
+    return {"meeting_id": meeting_id, "status": "initialized"}
+
 @app.get("/api/meeting/{meeting_id}")
 def get_meeting_full(meeting_id: str):
     m = database.get_meeting(meeting_id)
@@ -115,6 +133,8 @@ async def submit_transcript(meeting_id: str, payload: TranscriptSubmission):
 
     asyncio.create_task(process_agentic_pipeline(meeting_id, text))
     return {"status": "processing_started", "meeting_id": meeting_id}
+
+
 
 async def process_agentic_pipeline(meeting_id: str, text: str):
     """Async Agent Pipeline with Live Processing Stage Visualizations."""
@@ -387,7 +407,11 @@ async def mark_item_complete(meeting_id: str, item_id: str):
     return item
 
 @app.post("/api/meeting/upload")
-async def upload_meeting(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
+async def upload_meeting(
+    file: UploadFile = File(...), 
+    meeting_id: Optional[str] = Form(None),
+    background_tasks: BackgroundTasks = None
+):
     """Accept an audio/video recording, store it, and start processing.
     Returns a meeting_id that can be used to query status/results.
     """
@@ -402,8 +426,9 @@ async def upload_meeting(file: UploadFile = File(...), background_tasks: Backgro
     upload_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
     os.makedirs(upload_dir, exist_ok=True)
 
-    # Generate unique meeting ID and file path
-    meeting_id = str(uuid.uuid4())
+    # Generate unique meeting ID if not provided, and file path
+    if not meeting_id:
+        meeting_id = str(uuid.uuid4())
     file_ext = os.path.splitext(file.filename)[1]
     saved_path = os.path.join(upload_dir, f"{meeting_id}{file_ext}")
     # Save uploaded file to disk
