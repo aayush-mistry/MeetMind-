@@ -45,6 +45,11 @@ class MeetingInit(BaseModel):
     description: Optional[str] = ""
 
 
+class SearchQuery(BaseModel):
+    query: str
+    filters: Optional[Dict[str, Any]] = None
+
+
 from app.samples import SAMPLE_TRANSCRIPTS
 
 app = FastAPI(

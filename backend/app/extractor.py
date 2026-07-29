@@ -165,6 +165,52 @@ async def extract_meeting_intelligence(meeting_id: str, transcript_text: str) ->
             )
         )
 
+    # --- Vector DB Indexing ---
+    try:
+        from app.services.vector_db import vector_db
+        from app.services.ai.embeddings import embedding_service
+        
+        if vector_db.is_available() and embedding_service.model:
+            # 1. Chunk and embed transcript
+            chunks = embedding_service.chunk_transcript(transcript_text)
+            if chunks:
+                chunk_embeddings = embedding_service.get_embeddings(chunks)
+                chunk_metadatas = [{"meeting_id": meeting_id, "type": "transcript_chunk"} for _ in chunks]
+                vector_db.add_chunks(meeting_id, chunks, chunk_embeddings, chunk_metadatas)
+
+            # 2. Embed topics
+            topic_texts = [f"Topic: {t.topic_name}. Summary: {t.summary}. Keywords: {', '.join(t.keywords)}" for t in topics]
+            if topic_texts:
+                topic_embeddings = embedding_service.get_embeddings(topic_texts)
+                topic_metadatas = [{"meeting_id": meeting_id, "type": "topic", "topic_id": t.id, "topic_name": t.topic_name} for t in topics]
+                vector_db.add_metadata_items(meeting_id, topic_texts, topic_embeddings, topic_metadatas)
+
+            # 3. Embed Action Items
+            ai_texts = [f"Action Item: {ai.task_title}. Owner: {ai.owner}. Desc: {ai.task_description}" for ai in action_items]
+            if ai_texts:
+                ai_embeddings = embedding_service.get_embeddings(ai_texts)
+                ai_metadatas = [{"meeting_id": meeting_id, "type": "action_item", "item_id": ai.id} for ai in action_items]
+                vector_db.add_metadata_items(meeting_id, ai_texts, ai_embeddings, ai_metadatas)
+
+            # 4. Embed Decisions
+            dec_texts = [f"Decision: {d.decision}. By: {d.decided_by}" for d in decisions]
+            if dec_texts:
+                dec_embeddings = embedding_service.get_embeddings(dec_texts)
+                dec_metadatas = [{"meeting_id": meeting_id, "type": "decision", "decision_id": d.id} for d in decisions]
+                vector_db.add_metadata_items(meeting_id, dec_texts, dec_embeddings, dec_metadatas)
+                
+            # 5. Embed Risks/Blockers
+            rb_texts = [f"{rb.type.capitalize()}: {rb.description}. Severity: {rb.severity}" for rb in risks_blockers]
+            if rb_texts:
+                rb_embeddings = embedding_service.get_embeddings(rb_texts)
+                rb_metadatas = [{"meeting_id": meeting_id, "type": rb.type, "item_id": rb.id} for rb in risks_blockers]
+                vector_db.add_metadata_items(meeting_id, rb_texts, rb_embeddings, rb_metadatas)
+                
+            print(f"[Extractor] Successfully indexed meeting {meeting_id} into Vector DB")
+            
+    except Exception as e:
+        print(f"[Extractor] Error indexing to Vector DB: {e}")
+
     return summary, action_items, decisions, risks_blockers, topics
 
 

@@ -12,6 +12,7 @@ import Settings from './pages/Settings';
 import CalendarDashboard from './pages/CalendarDashboard';
 import MeetingMinutes from './pages/MeetingMinutes';
 import TopicsDashboard from './pages/TopicsDashboard';
+import SemanticSearch from './pages/SemanticSearch';
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="minutes" element={<MeetingMinutes />} />
         <Route path="minutes/:id" element={<MeetingMinutes />} />
         <Route path="topics" element={<TopicsDashboard />} />
+        <Route path="search" element={<SemanticSearch />} />
       </Route>
     </Routes>
   );
