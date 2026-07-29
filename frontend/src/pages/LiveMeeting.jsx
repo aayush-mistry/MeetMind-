@@ -7,6 +7,7 @@ import ReminderFeed from '../components/ReminderFeed';
 import TaskDetailDrawer from '../components/TaskDetailDrawer';
 import SpeakersList from '../components/SpeakersList';
 import TopicsDashboard from './TopicsDashboard';
+import TranscriptView from '../components/TranscriptView';
 
 const API_BASE = '/api';
 
@@ -245,10 +246,20 @@ export default function LiveMeeting() {
           >
             Topics
           </button>
+          <button
+            onClick={() => setActiveTab('transcript')}
+            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'transcript'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            Transcript
+          </button>
         </nav>
       </div>
 
-      {activeTab === 'overview' ? (
+      {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <ActionItemsTable
@@ -266,9 +277,17 @@ export default function LiveMeeting() {
             {meetingId && <SpeakersList meetingId={meetingId} />}
           </div>
         </div>
-      ) : (
+      )}
+
+      {activeTab === 'topics' && (
         <div className="-mx-6">
           <TopicsDashboard />
+        </div>
+      )}
+
+      {activeTab === 'transcript' && (
+        <div className="-mx-6">
+          <TranscriptView meeting={meeting} />
         </div>
       )}
 

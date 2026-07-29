@@ -37,6 +37,7 @@ def init_db():
             title TEXT NOT NULL,
             description TEXT,
             transcript TEXT NOT NULL,
+            original_transcript TEXT,
             created_at TEXT NOT NULL,
             meeting_type TEXT DEFAULT 'live',
             original_language TEXT,
@@ -47,6 +48,17 @@ def init_db():
             processing_time_seconds INTEGER
         )
     """)
+
+    # Migration for older databases that don't have original_transcript
+    try:
+        cursor.execute("SELECT original_transcript FROM meetings LIMIT 1")
+    except sqlite3.OperationalError:
+        try:
+            cursor.execute("ALTER TABLE meetings ADD COLUMN original_transcript TEXT")
+            conn.commit()
+            print("[Database] Migrated 'meetings' table to include 'original_transcript'")
+        except Exception as e:
+            print(f"[Database] Migration failed: {e}")
 
     # Meeting Summaries table
     cursor.execute("""
@@ -230,18 +242,24 @@ def save_meeting(meeting: Meeting):
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO meetings (id, title, description, transcript, created_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO meetings (id, title, description, transcript, original_transcript, original_language, translation_language, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             title=excluded.title,
             description=excluded.description,
-            transcript=excluded.transcript
+            transcript=excluded.transcript,
+            original_transcript=excluded.original_transcript,
+            original_language=excluded.original_language,
+            translation_language=excluded.translation_language
     """,
         (
             meeting.id,
             meeting.title,
             meeting.description,
             meeting.transcript,
+            meeting.original_transcript,
+            meeting.original_language,
+            meeting.translation_language,
             meeting.created_at,
         ),
     )
@@ -261,6 +279,9 @@ def get_meetings() -> List[Meeting]:
             title=r["title"],
             description=r["description"],
             transcript=r["transcript"],
+            original_transcript=r["original_transcript"] if "original_transcript" in r.keys() else None,
+            original_language=r["original_language"] if "original_language" in r.keys() else "en",
+            translation_language=r["translation_language"] if "translation_language" in r.keys() else "en",
             created_at=r["created_at"],
         )
         for r in rows
@@ -280,6 +301,9 @@ def get_meeting(meeting_id: str) -> Optional[Meeting]:
         title=r["title"],
         description=r["description"],
         transcript=r["transcript"],
+        original_transcript=r["original_transcript"] if "original_transcript" in r.keys() else None,
+        original_language=r["original_language"] if "original_language" in r.keys() else "en",
+        translation_language=r["translation_language"] if "translation_language" in r.keys() else "en",
         created_at=r["created_at"],
     )
 

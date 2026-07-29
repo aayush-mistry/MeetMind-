@@ -97,6 +97,9 @@ class Meeting(BaseModel):
     title: str
     description: Optional[str] = ""
     transcript: str
+    original_transcript: Optional[str] = None
+    original_language: Optional[str] = "en"
+    translation_language: Optional[str] = "en"
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
@@ -117,6 +120,9 @@ class MeetingTopic(BaseModel):
 
 class TranscriptSubmission(BaseModel):
     text: str
+    original_transcript: Optional[str] = None
+    original_language: Optional[str] = "en"
+    translation_language: Optional[str] = "en"
 
 
 class AgentEvent(BaseModel):

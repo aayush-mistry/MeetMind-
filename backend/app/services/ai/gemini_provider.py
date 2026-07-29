@@ -69,7 +69,8 @@ class GeminiProvider(AIService):
 
             detected_lang = data.get("original_language", "Unknown")
             transcript = data.get("english_transcript", "")
-            return detected_lang, transcript
+            original_transcript = data.get("original_transcript", transcript)
+            return detected_lang, transcript, original_transcript
 
         except Exception as e:
             raise ProviderError(f"Gemini transcription failed: {str(e)}")

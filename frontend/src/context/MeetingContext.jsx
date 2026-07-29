@@ -23,10 +23,13 @@ export const MeetingProvider = ({ children }) => {
 
   const wsRef = useRef(null);
 
+  const [meeting, setMeeting] = useState(null);
+
   const fetchMeetingData = (mId) => {
     fetch(`${API_BASE}/meeting/${mId}`)
       .then(res => res.json())
       .then(data => {
+        if (data.meeting) setMeeting(data.meeting);
         if (data.summary) setSummary(data.summary);
         if (Array.isArray(data.action_items)) setItems(data.action_items);
         if (Array.isArray(data.decisions)) setDecisions(data.decisions);
@@ -192,25 +195,18 @@ export const MeetingProvider = ({ children }) => {
 
   return (
     <MeetingContext.Provider value={{
-      meetingId,
-      setMeetingId,
-      summary,
-      setSummary,
-      items,
-      setItems,
-      decisions,
-      setDecisions,
-      risksBlockers,
-      setRisksBlockers,
-      topics,
-      setTopics,
-      agentEvents,
-      setAgentEvents,
+      meetingId, setMeetingId,
+      meeting,
+      summary, setSummary,
+      items, setItems,
+      decisions, setDecisions,
+      risksBlockers, setRisksBlockers,
+      topics, setTopics,
+      agentEvents, setAgentEvents,
       wsConnected,
-      isExtracting,
-      setIsExtracting,
-      analysisStageIndex,
-      setAnalysisStageIndex,
+      isExtracting, setIsExtracting,
+      analysisStageIndex, setAnalysisStageIndex,
+      fetchMeetingData,
       wsRef
     }}>
       {children}

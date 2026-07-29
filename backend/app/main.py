@@ -166,7 +166,14 @@ async def submit_transcript(meeting_id: str, payload: TranscriptSubmission):
     # Save Meeting record
     title_match = text.split("\n")[0][:40] if text else "Meeting Transcript"
     title = f"Sync: {title_match}..."
-    meeting = Meeting(id=meeting_id, title=title, transcript=text)
+    meeting = Meeting(
+        id=meeting_id, 
+        title=title, 
+        transcript=text,
+        original_transcript=payload.original_transcript,
+        original_language=payload.original_language,
+        translation_language=payload.translation_language
+    )
     await run_in_threadpool(database.save_meeting, meeting)
 
     asyncio.create_task(process_agentic_pipeline(meeting_id, text))
@@ -306,12 +313,13 @@ async def process_uploaded_meeting(meeting_id: str, file_path: str, metadata: Di
         provider = get_ai_provider()
 
         await stage_update("Transcribing and Translating", progress=0.3)
-        detected_lang, transcript = await provider.transcribe_and_translate(file_path)
+        detected_lang, transcript, original_transcript = await provider.transcribe_and_translate(file_path)
 
     except Exception as e:
         print(f"[Audio Processing] Transcription failed: {e}")
         detected_lang = "en"
         transcript = f"Transcription failed due to API error: {str(e)}"
+        original_transcript = transcript
 
     await stage_update(f"Language Detected: {detected_lang}", progress=0.6)
 
@@ -323,6 +331,9 @@ async def process_uploaded_meeting(meeting_id: str, file_path: str, metadata: Di
         title=metadata.get("file_name", "Uploaded Recording"),
         description="Uploaded recording",
         transcript=transcript,
+        original_transcript=original_transcript,
+        original_language=detected_lang,
+        translation_language="en",
         created_at=datetime.utcnow().isoformat(),
     )
     await run_in_threadpool(database.save_meeting, meeting)
@@ -754,6 +765,16 @@ def export_meeting_minutes(meeting_id: str, format: str):
 
     # For the stub, just return text as the requested format type
     content = minutes.content
+    
+    # Append transcripts
+    meeting = database.get_meeting(meeting_id)
+    if meeting:
+        content += "\n\n## English Transcript\n\n"
+        content += meeting.transcript
+        
+        if meeting.original_transcript and meeting.original_language and meeting.original_language.lower() != "en":
+            content += f"\n\n## Original Transcript ({meeting.original_language})\n\n"
+            content += meeting.original_transcript
 
     fd, path = tempfile.mkstemp(suffix=f".{format}")
     with os.fdopen(fd, "w", encoding="utf-8") as f:

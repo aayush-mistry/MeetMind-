@@ -26,10 +26,10 @@ class AIService(ABC):
         pass
 
     @abstractmethod
-    async def transcribe_and_translate(self, file_path: str) -> Tuple[str, str]:
+    async def transcribe_and_translate(self, file_path: str) -> tuple[str, str, str]:
         """
-        Transcribe an audio file and translate to English if necessary.
-        Returns a tuple of (original_language, english_transcript).
+        Transcribes audio and translates to English if necessary.
+        Returns: (detected_language, english_transcript, original_transcript)
         """
         pass
 

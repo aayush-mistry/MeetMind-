@@ -52,9 +52,12 @@ Meeting Transcript:
 """
 
 AUDIO_TRANSCRIPTION_PROMPT = """
-Listen to this audio file. First, identify the original spoken language.
-Then, transcribe the audio perfectly. If the audio is not in English, translate the transcription into English.
-Return a JSON object with exactly two string keys: 'original_language' and 'english_transcript'.
+Listen to this audio file. First, identify the original spoken language. 
+Pay special attention to detect Gujarati (gu) or English.
+Then, transcribe the audio perfectly in its original language. 
+If the audio is not in English (e.g., Gujarati), you MUST translate the transcription into English.
+Return a JSON object with exactly three string keys: 'original_language' (e.g., "Gujarati" or "English"), 'original_transcript', and 'english_transcript'.
+If the original language is English, 'original_transcript' and 'english_transcript' will be identical.
 """
 
 CHAT_PROMPT_TEMPLATE = """
